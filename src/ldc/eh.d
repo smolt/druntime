@@ -34,6 +34,7 @@ version (ARM)
 {
     // FIXME: Almost certainly wrong.
     version (linux) version = GCC_UNWIND;
+    //version (darwin) version = GCC_UNWIND;
     version (freebsd) version = GCC_UNWIND;
 }
 version (AArch64)
@@ -185,6 +186,22 @@ else
         console("_Unwind_RaiseException is not implemented on this platform.\n");
         return _Unwind_Reason_Code.FATAL_PHASE1_ERROR;
     }
+    ptrdiff_t _Unwind_GetRegionStart(_Unwind_Context_Ptr context)
+    {
+        // dano - TODO:
+        return 0;
+    }
+    ptrdiff_t _Unwind_GetTextRelBase(_Unwind_Context_Ptr context)
+    {
+        // dano - TODO:
+        return 0;
+    }
+    ptrdiff_t _Unwind_GetDataRelBase(_Unwind_Context_Ptr context)
+    {
+        // dano - TODO:
+        return 0;
+    }
+
 }
 
 }
@@ -621,7 +638,20 @@ private void _d_getLanguageSpecificTables(_Unwind_Context_Ptr context, ref ubyte
 }
 
 } // end of x86 Linux specific implementation
-
+else
+{
+    // dano - TODO: stub
+    extern(C)
+        _Unwind_Reason_Code _d_eh_personality(int ver,
+                                              _Unwind_Action actions,
+                                              ulong exception_class,
+                                              _Unwind_Exception* exception_info,
+                                              _Unwind_Context_Ptr context)
+    {
+        debug(EH_personality_verbose) printf("entering personality function. context: %p\n", context);
+        return _Unwind_Reason_Code.FATAL_PHASE1_ERROR;
+    }
+}
 
 extern(C) void _d_throw_exception(Object e)
 {
