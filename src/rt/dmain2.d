@@ -378,6 +378,9 @@ alias extern(C) int function(char[][] args) MainFunc;
  * main function and call the _d_run_main function
  * themselves with any main function.
  */
+version (ARM) {
+    // dano - TODO: Not really arm, but as good as anything.
+} else
 extern (C) int main(int argc, char **argv)
 {
     return _d_run_main(argc, argv, &_Dmain);
