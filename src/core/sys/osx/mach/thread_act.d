@@ -124,3 +124,52 @@ version( i386 )
     kern_return_t thread_resume(thread_act_t);
     kern_return_t thread_get_state(thread_act_t, thread_state_flavor_t, thread_state_t*, mach_msg_type_number_t*);
 }
+
+// dano - TODO: this is just a place holder
+version ( ARM )
+{
+    alias mach_port_t thread_act_t;
+    alias void        thread_state_t;
+    alias int         thread_state_flavor_t;
+    alias natural_t   mach_msg_type_number_t;
+
+    enum
+    {
+        ARM_THREAD_STATE        = 7,
+        THREAD_STATE_NONE       = 13,
+    }
+
+    struct arm_thread_state32_t
+    {
+    }
+
+    struct arm_state_hdr_t
+    {
+        int     flavor;
+        int     count;
+    }
+
+    struct arm_thread_state_t
+    {
+        arm_state_hdr_t             tsh;
+        union _uts
+        {
+            arm_thread_state32_t    ts32;
+        }
+        _uts                        uts;
+    }
+
+    enum : mach_msg_type_number_t
+    {
+        ARM_THREAD_STATE32_COUNT = cast(mach_msg_type_number_t)( arm_thread_state32_t.sizeof / int.sizeof ),
+        ARM_THREAD_STATE_COUNT   = cast(mach_msg_type_number_t)( arm_thread_state_t.sizeof / int.sizeof ),
+    }
+
+    alias ARM_THREAD_STATE          MACHINE_THREAD_STATE;
+    alias ARM_THREAD_STATE_COUNT    MACHINE_THREAD_STATE_COUNT;
+
+    mach_port_t   mach_thread_self();
+    kern_return_t thread_suspend(thread_act_t);
+    kern_return_t thread_resume(thread_act_t);
+    kern_return_t thread_get_state(thread_act_t, thread_state_flavor_t, thread_state_t*, mach_msg_type_number_t*);
+}

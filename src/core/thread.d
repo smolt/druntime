@@ -1362,6 +1362,10 @@ private:
         ulong[16]       m_reg; // rdi,rsi,rbp,rsp,rbx,rdx,rcx,rax
                                // r8,r9,r10,r11,r12,r13,r14,r15
       }
+      else version (ARM)
+      {
+          uint[8] m_reg; // dano TODO: just get to compile
+      }
       else
       {
         static assert(false, "Architecture not supported." );
@@ -2084,6 +2088,24 @@ else
             // Callee-save registers, according to AAPCS, section 5.1.1.
             // FIXME: As loads/stores are explicit on ARM, the code generated for
             // this is horrible. Better write the entire function in ASM.
+
+            // dano - TODO: hack out the non-thumb registers
+            // for my simple thumb2 version.  Need way of detecting thumb
+            // versus thumb2.
+            version (ARM_Thumb)
+            {
+            size_t[4] regs = void;
+            __asm("str  r4, $0", "=*m", regs.ptr + 0);
+            __asm("str  r5, $0", "=*m", regs.ptr + 1);
+            __asm("str  r6, $0", "=*m", regs.ptr + 2);
+            __asm("str  r7, $0", "=*m", regs.ptr + 3);
+            __asm("str sp, $0", "=*m", &sp);
+            // note: above instruction is not available in thumb, only thumb2
+            // thumb I think would need to move sp to another reg first
+            //__asm("mov $1, sp;str $1, $0", "=*m,~r", &sp);
+            }
+            else
+            {
             size_t[8] regs = void;
             __asm("str  r4, $0", "=*m", regs.ptr + 0);
             __asm("str  r5, $0", "=*m", regs.ptr + 1);
@@ -2095,6 +2117,7 @@ else
             __asm("str r11, $0", "=*m", regs.ptr + 7);
 
             __asm("str sp, $0", "=*m", &sp);
+            }
         }
         else
         {
@@ -2241,6 +2264,10 @@ private void suspend( Thread t )
             t.m_reg[13] = state.r13;
             t.m_reg[14] = state.r14;
             t.m_reg[15] = state.r15;
+        }
+        else version (ARM)
+        {
+            // dano TODO: just get it to compile
         }
         else
         {
@@ -3045,6 +3072,12 @@ private
             version = AsmMIPS_O32_Posix;
             version = AsmExternal;
         }
+    }
+    else version ( ARM )
+    {
+        // dano TODO: just get it to compile
+        version = AsmARM_Posix;
+        version = AsmExternal;
     }
 
 
@@ -4040,6 +4073,10 @@ private:
             push( 0x00000000_00000000 );                            // R13
             push( 0x00000000_00000000 );                            // R14
             push( 0x00000000_00000000 );                            // R15
+        }
+        else version ( AsmARM_Posix )
+        {
+            // dano -TODO:
         }
         else version( AsmPPC_Posix )
         {
