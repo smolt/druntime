@@ -509,37 +509,85 @@ version( linux )
 }
 else version( OSX )
 {
-    struct stat_t
+    // iOS always uses 64-bit inode with normal stat() function (there is no
+    // stat64).  MacOS I think uses stat$INODE64 for 64-bit.  Anyway, I am
+    // only focusing on iOS, so not touch MacOS here and now.
+    version (ARM) version = DARWIN_64_BIT_INO_T;
+
+    version (DARWIN_64_BIT_INO_T)
     {
-        dev_t       st_dev;
-        ino_t       st_ino;
-        mode_t      st_mode;
-        nlink_t     st_nlink;
-        uid_t       st_uid;
-        gid_t       st_gid;
-        dev_t       st_rdev;
-      static if( false /*!_POSIX_C_SOURCE || _DARWIN_C_SOURCE*/ )
-      {
-          timespec  st_atimespec;
-          timespec  st_mtimespec;
-          timespec  st_ctimespec;
-      }
-      else
-      {
-        time_t      st_atime;
-        c_long      st_atimensec;
-        time_t      st_mtime;
-        c_long      st_mtimensec;
-        time_t      st_ctime;
-        c_long      st_ctimensec;
-      }
-        off_t       st_size;
-        blkcnt_t    st_blocks;
-        blksize_t   st_blksize;
-        uint        st_flags;
-        uint        st_gen;
-        int         st_lspare;
-        long        st_qspare[2];
+        struct stat_t
+        {
+            dev_t       st_dev;
+            mode_t      st_mode;
+            nlink_t     st_nlink;
+            ulong       st_ino;
+            uid_t       st_uid;
+            gid_t       st_gid;
+            dev_t       st_rdev;
+
+            static if( false /*!_POSIX_C_SOURCE || _DARWIN_C_SOURCE*/ )
+            {
+                timespec  st_atimespec;
+                timespec  st_mtimespec;
+                timespec  st_ctimespec;
+                timespec  st_birthtimespec;
+            }
+            else
+            {
+                time_t      st_atime;
+                c_long      st_atimensec;
+                time_t      st_mtime;
+                c_long      st_mtimensec;
+                time_t      st_ctime;
+                c_long      st_ctimensec;
+                time_t      st_birthtime;
+                c_long      st_birthtimensec;
+            }
+
+            off_t       st_size;
+            blkcnt_t    st_blocks;
+            blksize_t   st_blksize;
+            uint        st_flags;
+            uint        st_gen;
+            int         st_lspare;
+            long        st_qspare[2];
+        }
+    }
+    else // ! version (DARWIN_64_BIT_INO_T)
+    {
+        struct stat_t
+        {
+            dev_t       st_dev;
+            ino_t       st_ino;
+            mode_t      st_mode;
+            nlink_t     st_nlink;
+            uid_t       st_uid;
+            gid_t       st_gid;
+            dev_t       st_rdev;
+            static if( false /*!_POSIX_C_SOURCE || _DARWIN_C_SOURCE*/ )
+            {
+                timespec  st_atimespec;
+                timespec  st_mtimespec;
+                timespec  st_ctimespec;
+            }
+            else
+            {
+                time_t      st_atime;
+                c_long      st_atimensec;
+                time_t      st_mtime;
+                c_long      st_mtimensec;
+                time_t      st_ctime;
+                c_long      st_ctimensec;
+            }
+            off_t       st_size;
+            blkcnt_t    st_blocks;
+            blksize_t   st_blksize;
+            uint        st_flags;
+            uint        st_gen;
+            int         st_lspare;
+            long        st_qspare[2];
+        }
     }
 
     enum S_IRUSR    = 0x100;  // octal 0400
