@@ -488,6 +488,7 @@ unittest
     }
 }
 
+version (Xyzzy) {} else
 unittest // Test for Issue 10381
 {
     alias II = int[int];
@@ -837,6 +838,9 @@ unittest
 }
 
 // Issue 9852
+version (Xyzzy) unittest {
+    import ldc.xyzzy; skipTest();
+} else
 unittest
 {
     // Original test case (revised, original assert was wrong)
