@@ -16,6 +16,9 @@ public import core.time; // for Duration
 import core.exception : onOutOfMemoryError;
 static import rt.tlsgc;
 
+// Use xyzzy.ThreadLocal to limp by on iOS without builtin TLS
+version (Xyzzy) static import xyzzy = ldc.xyzzy;
+
 // this should be true for most architectures
 version = StackGrowsDown;
 
@@ -362,7 +365,8 @@ else version( Posix )
         //
         __gshared sem_t suspendCount;
 
-
+        // TODO: thread_suspendHandler and thread_resumeHandler not used for
+        // OSX/iOS - should they be versioned out?
         extern (C) void thread_suspendHandler( int sig )
         in
         {
@@ -1225,6 +1229,12 @@ private:
     //
     // Local storage
     //
+    version (Xyzzy)
+    {
+        // Until iOS gets TLS...
+        __gshared xyzzy.ThreadLocal!Thread sm_this;
+    }
+    else
     static Thread       sm_this;
 
 
@@ -1353,6 +1363,8 @@ private:
     }
     else version( OSX )
     {
+      // TODO: find out why are m_reg explicitly scanned on Windows but not
+      // OSX?
       version( X86 )
       {
         uint[8]         m_reg; // edi,esi,ebp,esp,ebx,edx,ecx,eax
@@ -1364,7 +1376,7 @@ private:
       }
       else version (ARM)
       {
-          uint[8] m_reg; // dano TODO: just get to compile
+          uint[16]      m_reg; // r0-r15
       }
       else
       {
@@ -1651,7 +1663,14 @@ else
     version (Windows)
         static assert(__traits(classInstanceSize, Thread) == 120);
     else version (OSX)
-        static assert(__traits(classInstanceSize, Thread) == 120);
+     {
+         version (X86)
+             static assert(__traits(classInstanceSize, Thread) == 120);
+         else version (ARM)
+             static assert(__traits(classInstanceSize, Thread) == 152);
+         else
+             static assert(0, "Platform not supported");
+     }
     else version (Posix)
         static assert(__traits(classInstanceSize, Thread) ==  84);
     else
@@ -1713,6 +1732,12 @@ extern (C) void thread_init()
 
     Thread.initLocks();
 
+    version (Xyzzy)
+    {
+        Thread.sm_this.init();
+        Fiber.sm_this.init();
+    }
+
     version( OSX )
     {
     }
@@ -1769,6 +1794,11 @@ extern (C) void thread_init()
  */
 extern (C) void thread_term()
 {
+    version (Xyzzy)
+    {
+        Fiber.sm_this.cleanup();
+        Thread.sm_this.cleanup();
+    }
     Thread.termLocks();
 }
 
@@ -2001,6 +2031,8 @@ shared static ~this()
 // Used for needLock below.
 private __gshared bool multiThreadedFlag = false;
 
+// TODO: later do asm version as will be easier to maintain
+//version (ARM) version = ExternStackShell;
 version (PPC64) version = ExternStackShell;
 
 version (ExternStackShell)
@@ -2089,34 +2121,30 @@ else
             // FIXME: As loads/stores are explicit on ARM, the code generated for
             // this is horrible. Better write the entire function in ASM.
 
-            // dano - TODO: hack out the non-thumb registers
-            // for my simple thumb2 version.  Need way of detecting thumb
-            // versus thumb2.
-            version (ARM_Thumb)
+            // ARM_Thumb1 isn't predeclared in the compiler but could be based
+            // on arm arch.
+            version (ARM_Thumb1)
             {
-            size_t[4] regs = void;
-            __asm("str  r4, $0", "=*m", regs.ptr + 0);
-            __asm("str  r5, $0", "=*m", regs.ptr + 1);
-            __asm("str  r6, $0", "=*m", regs.ptr + 2);
-            __asm("str  r7, $0", "=*m", regs.ptr + 3);
-            __asm("str sp, $0", "=*m", &sp);
-            // note: above instruction is not available in thumb, only thumb2
-            // thumb I think would need to move sp to another reg first
-            //__asm("mov $1, sp;str $1, $0", "=*m,~r", &sp);
+                size_t[4] regs = void;
+                __asm("str  r4, $0", "=*m", regs.ptr + 0);
+                __asm("str  r5, $0", "=*m", regs.ptr + 1);
+                __asm("str  r6, $0", "=*m", regs.ptr + 2);
+                __asm("str  r7, $0", "=*m", regs.ptr + 3);
+                __asm("mov $1, sp;str $1, $0", "=*m,~r", &sp);
             }
-            else
+            else // arm and thumb2 instructions
             {
-            size_t[8] regs = void;
-            __asm("str  r4, $0", "=*m", regs.ptr + 0);
-            __asm("str  r5, $0", "=*m", regs.ptr + 1);
-            __asm("str  r6, $0", "=*m", regs.ptr + 2);
-            __asm("str  r7, $0", "=*m", regs.ptr + 3);
-            __asm("str  r8, $0", "=*m", regs.ptr + 4);
-            __asm("str  r9, $0", "=*m", regs.ptr + 5);
-            __asm("str r10, $0", "=*m", regs.ptr + 6);
-            __asm("str r11, $0", "=*m", regs.ptr + 7);
+                size_t[8] regs = void;
+                __asm("str  r4, $0", "=*m", regs.ptr + 0);
+                __asm("str  r5, $0", "=*m", regs.ptr + 1);
+                __asm("str  r6, $0", "=*m", regs.ptr + 2);
+                __asm("str  r7, $0", "=*m", regs.ptr + 3);
+                __asm("str  r8, $0", "=*m", regs.ptr + 4);
+                __asm("str  r9, $0", "=*m", regs.ptr + 5);
+                __asm("str r10, $0", "=*m", regs.ptr + 6);
+                __asm("str r11, $0", "=*m", regs.ptr + 7);
 
-            __asm("str sp, $0", "=*m", &sp);
+                __asm("str sp, $0", "=*m", &sp);
             }
         }
         else
@@ -2267,7 +2295,21 @@ private void suspend( Thread t )
         }
         else version (ARM)
         {
-            // dano TODO: just get it to compile
+            arm_thread_state32_t    state = void;
+            mach_msg_type_number_t  count = ARM_THREAD_STATE32_COUNT;
+
+            // Thought this would be ARM_THREAD_STATE32, but that fails.
+            // Mystery
+            if( thread_get_state( t.m_tmach, ARM_THREAD_STATE, &state, &count ) != KERN_SUCCESS )
+                throw new ThreadException( "Unable to load thread state" );
+            // TODO: figure out why ThreadException here recurses forever!
+            //printf("state count %d (expect %d)\n", count ,ARM_THREAD_STATE32_COUNT);
+            if( !t.m_lock )
+                t.m_curr.tstack = cast(void*) state.sp;
+            t.m_reg[0..13] = state.r;  // r0 - r13
+            t.m_reg[13] = state.sp;
+            t.m_reg[14] = state.lr;
+            t.m_reg[15] = state.pc;
         }
         else
         {
@@ -2741,6 +2783,8 @@ private void* getStackTop()
             pragma(LDC_allow_inline);
             return __asm!(void *)("movq %rsp, $0", "=r");
         }
+        // TODO - could add ARM version "mov $0,sp" "=r" to use instead of
+        // llvm_frame_address
         else
         {
             import ldc.intrinsics;
@@ -3075,9 +3119,11 @@ private
     }
     else version ( ARM )
     {
-        // dano TODO: just get it to compile
-        version = AsmARM_Posix;
-        version = AsmExternal;
+        version( Posix )
+        {
+            version = AsmARM_Posix;
+            version = AsmExternal;
+        }
     }
 
 
@@ -4074,10 +4120,6 @@ private:
             push( 0x00000000_00000000 );                            // R14
             push( 0x00000000_00000000 );                            // R15
         }
-        else version ( AsmARM_Posix )
-        {
-            // dano -TODO:
-        }
         else version( AsmPPC_Posix )
         {
             version( StackGrowsDown )
@@ -4146,6 +4188,38 @@ private:
             pstack -= ABOVE;
             *cast(size_t*)(pstack - SZ_RA) = cast(size_t)&fiber_entryPoint;
         }
+        else version( AsmARM_Posix )
+        {
+            /* We keep the FP registers and the return address below
+             * the stack pointer, so they don't get scanned by the
+             * GC. The last frame before swapping the stack pointer is
+             * organized like the following.
+             *
+             *   |  |-----------|<= 'frame starts here'
+             *   |  |     fp    | (the actual frame pointer, r11 isn't
+             *   |  |   r10-r4  |  updated and still points to the previous frame)
+             *   |  |-----------|<= stack pointer
+             *   |  |     lr    |
+             *   |  | 4byte pad |
+             *   |  |   d15-d8  |(if FP supported)
+             *   |  |-----------|
+             *   Y
+             *   stack grows down: The pointer value here is smaller than some lines above
+             */
+            // frame pointer can be zero, r10-r4 also zero initialized
+            version( StackGrowsDown )
+                pstack -= int.sizeof * 8;
+            else
+                static assert(false, "Only full descending stacks supported on ARM");
+
+            // link register
+            push( cast(size_t) &fiber_entryPoint );
+            /*
+             * We do not push padding and d15-d8 as those are zero initialized anyway
+             * Position the stack pointer above the lr register
+             */
+            pstack += int.sizeof * 1;
+        }
         else static if( __traits( compiles, ucontext_t ) )
         {
             getcontext( &m_utxt );
@@ -4189,6 +4263,12 @@ private:
         sm_this = f;
     }
 
+    version (Xyzzy)
+    {
+        // Until iOS gets TLS...
+        __gshared xyzzy.ThreadLocal!Fiber sm_this;
+    }
+    else
     static Fiber sm_this;
 
 
