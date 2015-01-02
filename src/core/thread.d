@@ -17,7 +17,7 @@ import core.exception : onOutOfMemoryError;
 static import rt.tlsgc;
 
 // Use xyzzy.ThreadLocal to limp by on iOS without builtin TLS
-version (Xyzzy) static import xyzzy = ldc.xyzzy;
+version (NoThreadLocalStorage) static import xyzzy = ldc.xyzzy;
 
 // this should be true for most architectures
 version = StackGrowsDown;
@@ -1229,7 +1229,7 @@ private:
     //
     // Local storage
     //
-    version (Xyzzy)
+    version (NoThreadLocalStorage)
     {
         // Until iOS gets TLS...
         __gshared xyzzy.ThreadLocal!Thread sm_this;
@@ -1732,7 +1732,7 @@ extern (C) void thread_init()
 
     Thread.initLocks();
 
-    version (Xyzzy)
+    version (NoThreadLocalStorage)
     {
         Thread.sm_this.init();
         Fiber.sm_this.init();
@@ -1794,7 +1794,7 @@ extern (C) void thread_init()
  */
 extern (C) void thread_term()
 {
-    version (Xyzzy)
+    version (NoThreadLocalStorage)
     {
         Fiber.sm_this.cleanup();
         Thread.sm_this.cleanup();
@@ -4263,7 +4263,7 @@ private:
         sm_this = f;
     }
 
-    version (Xyzzy)
+    version (NoThreadLocalStorage)
     {
         // Until iOS gets TLS...
         __gshared xyzzy.ThreadLocal!Fiber sm_this;
