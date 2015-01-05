@@ -291,19 +291,11 @@ void[] initTLSRanges()
 {
     version (OSX)
     {
-        // dano - TODO: TLS not ready yet on iOS
-        version (ARM)
-        {
-            return null;
-        }
-        else
-        {
         void* start = null;
         size_t size = 0;
         _d_dyld_getTLSRange(&dummyTlsSymbol, &start, &size);
         assert(start && size, "Could not determine TLS range.");
         return start[0 .. size];
-        }
     }
     else version (linux)
     {
