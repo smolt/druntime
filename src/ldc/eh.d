@@ -34,6 +34,7 @@ version (ARM)
 {
     // FIXME: Almost certainly wrong.
     version (linux) version = GCC_UNWIND;
+    version (darwin) version = GCC_UNWIND_SJLJ; // iOS
     version (freebsd) version = GCC_UNWIND;
 }
 version (AArch64)
@@ -78,7 +79,8 @@ extern(C)
         SEARCH_PHASE = 1,
         CLEANUP_PHASE = 2,
         HANDLER_FRAME = 4,
-        FORCE_UNWIND = 8
+        FORCE_UNWIND = 8,
+        END_OF_STACK = 16         // gcc extension to C++ ABI - do we need?
     }
 
     enum _DW_EH_Format : int
@@ -114,6 +116,9 @@ extern(C)
         _Unwind_Exception_Cleanup_Fn exception_cleanup;
         ptrdiff_t private_1;
         ptrdiff_t private_2;
+        // darwin unwind.h adds this explict padding so size is 32-bytes.  Do
+	// we need it?  Or do an align.  Something to think about
+        // uint reserved[3];
     }
 
 // interface to HP's libunwind from http://www.nongnu.org/libunwind/
@@ -142,6 +147,38 @@ version(HP_LIBUNWIND)
     alias __libunwind_Unwind_GetRegionStart _Unwind_GetRegionStart;
     alias __libunwind_Unwind_GetTextRelBase _Unwind_GetTextRelBase;
     alias __libunwind_Unwind_GetDataRelBase _Unwind_GetDataRelBase;
+}
+else version(GCC_UNWIND_SJLJ)
+{
+    // Same as GCC_UNWIND api below except some functions for setjmp/longjmp
+    // style exceptions have slightly different names.  There is no special
+    // ARM handling like GCC_UNWIND BELOW though.
+    //
+    // references:
+    // in GCC, for example gcc-4.8, see libgcc/unwind-sjlj.c
+    // https://github.com/mirrors/gcc/blob/master/libgcc/unwind-sjlj.c
+    //
+    // the Apple version can be found at
+    // https://www.opensource.apple.com/source/libunwind/libunwind-35.1/src/Unwind-sjlj.c
+    //
+    // Tested with Apple's version in iPhone SDK
+
+    void _Unwind_SjLj_Resume(_Unwind_Exception*);
+    _Unwind_Reason_Code _Unwind_SjLj_RaiseException(_Unwind_Exception*);
+
+    alias _Unwind_SjLj_Resume _Unwind_Resume;
+    alias _Unwind_SjLj_RaiseException _Unwind_RaiseException;
+
+    ptrdiff_t _Unwind_GetLanguageSpecificData(_Unwind_Context_Ptr context);
+
+    ptrdiff_t _Unwind_GetIP(_Unwind_Context_Ptr context);
+    void _Unwind_SetIP(_Unwind_Context_Ptr context, ptrdiff_t new_value);
+    void _Unwind_SetGR(_Unwind_Context_Ptr context, int index,
+                       ptrdiff_t new_value);
+
+    ptrdiff_t _Unwind_GetRegionStart(_Unwind_Context_Ptr context);
+    ptrdiff_t _Unwind_GetTextRelBase(_Unwind_Context_Ptr context);
+    ptrdiff_t _Unwind_GetDataRelBase(_Unwind_Context_Ptr context);
 }
 else version(GCC_UNWIND)
 {
@@ -376,10 +413,13 @@ __gshared char[8] _d_exception_class = "LLDCD2\0\0";
 
 
 //
-// x86 unwind specific implementation of personality function
+// unwind specific implementation of personality function
 // and helpers
 //
-version(GCC_UNWIND)
+version(GCC_UNWIND)      version = GCC_UNWIND_PERSONALITY;
+version(GCC_UNWIND_SJLJ) version = GCC_UNWIND_PERSONALITY;
+
+version(GCC_UNWIND_PERSONALITY)
 {
 
 // the personality routine gets called by the unwind handler and is responsible for
@@ -419,13 +459,42 @@ extern(C) _Unwind_Reason_Code _d_eh_personality(int ver, _Unwind_Action actions,
     // -1 because it will point past the last instruction
     ptrdiff_t ip = _Unwind_GetIP(context) - 1;
 
+    // Get landing pad for ip and action
+    ptrdiff_t landing_pad;
+    size_t action_offset;
+
+version (GCC_UNWIND_SJLJ)
+{
+    if (ip < 0) {
+        return _Unwind_Reason_Code.CONTINUE_UNWIND;
+    }
+    else if (ip == 0) {
+        // If ip is not present in the table, call terminate.  This is for
+        // a destructor inside a cleanup, or a library routine the compiler
+        // was not expecting to throw.
+        fatalerror("terminate\n");
+    }
+    else if (ip > 0) {
+        size_t cs_lp, cs_action;
+        do {
+            callsite_walker = get_uleb128(callsite_walker, cs_lp);
+            callsite_walker = get_uleb128(callsite_walker, cs_action);
+            debug(EH_personality_verbose)
+                printf("%x %x\n", cs_lp, cs_action);
+        }
+        while (--ip);
+
+        landing_pad = cs_lp + 1;
+        action_offset = cs_action;
+    }
+}
+else // !SJLJ
+{
     // address block_start is relative to
     ptrdiff_t region_start = _Unwind_GetRegionStart(context);
 
     // table entries
     uint block_start_offset, block_size;
-    ptrdiff_t landing_pad;
-    size_t action_offset;
 
     while (true)
     {
@@ -451,6 +520,7 @@ extern(C) _Unwind_Reason_Code _d_eh_personality(int ver, _Unwind_Action actions,
         if (ip < region_start + block_start_offset + block_size)
             break;
     }
+} // !SJLJ
 
     debug(EH_personality) printf("Found correct landing pad and actionOffset %d\n", action_offset);
 
@@ -542,6 +612,12 @@ else version (PPC)
     private enum eh_exception_regno = 3;
     private enum eh_selector_regno = 4;
 }
+version (ARM)
+{
+    // known to work with iOS sjlj - TODO: how about other ARM unwinders?
+    private enum eh_exception_regno = 0;
+    private enum eh_selector_regno = 1;
+}
 else version (AArch64)
 {
     private enum eh_exception_regno = 0;
@@ -604,12 +680,17 @@ private void _d_getLanguageSpecificTables(_Unwind_Context_Ptr context, ref ubyte
         fatalerror("DWARF header has unexpected format 1");
 
     ciEncoding = *data++;
-    if (ciEncoding == _DW_EH_Format.DW_EH_PE_omit)
-        fatalerror("Language Specific Data does not contain Types Table");
-
-    size_t cioffset;
-    data = get_uleb128(data, cioffset);
-    ci = data + cioffset;
+    if (ciEncoding == _DW_EH_Format.DW_EH_PE_omit) {
+        // TODO: verify this is ok with other personalities besides sjlj
+        // used for simple cleanup actions (finally, dtors) that don't care
+        // about exception type
+        ci = null;
+    }
+    else {
+        size_t cioffset;
+        data = get_uleb128(data, cioffset);
+        ci = data + cioffset;
+    }
 
     if (*data++ != _DW_EH_Format.DW_EH_PE_udata4)
         fatalerror("DWARF header has unexpected format 2");
@@ -620,7 +701,7 @@ private void _d_getLanguageSpecificTables(_Unwind_Context_Ptr context, ref ubyte
     callsite = data;
 }
 
-} // end of x86 Linux specific implementation
+} // end of GCC_UNWIND_PERSONALITY
 
 
 extern(C) void _d_throw_exception(Object e)
@@ -633,6 +714,12 @@ extern(C) void _d_throw_exception(Object e)
         debug(EH_personality) printf("throw exception %p\n", e);
         _Unwind_Reason_Code ret = _Unwind_RaiseException(&exc_struct.unwind_info);
         console("_Unwind_RaiseException failed with reason code: ")(ret)("\n");
+        if (ret == _Unwind_Reason_Code.END_OF_STACK) {
+            console("Uncaught exception - terminating\n");
+        }
+        else if (ret == _Unwind_Reason_Code.FATAL_PHASE1_ERROR) {
+            console("Possible corrupt stack during phase1 - terminating\n");
+        }
     }
     abort();
 }
