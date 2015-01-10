@@ -142,7 +142,7 @@ size_t _d_array_cast_len(size_t len, size_t elemsz, size_t newelemsz)
 void _d_array_slice_copy(void* dst, size_t dstlen, void* src, size_t srclen)
 {
     if (dstlen != 0) assert(dst);
-    if (dstlen != 0) assert(src);
+    if (srclen != 0) assert(src);
     if (dstlen != srclen)
         throw new Exception("lengths don't match for array copy");
     else if (dst+dstlen <= src || src+srclen <= dst)
