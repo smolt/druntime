@@ -432,7 +432,12 @@ private
 void[] initTLSRanges()
 {
     debug(PRINTF) printf("initTLSRanges called\n");
-    version (OSX)
+    version (NoThreadLocalStorage)
+    {
+        pragma(msg, "note: TLS is disable");
+        return null;
+    }
+    else version (OSX)
     {
         void* start = null;
         size_t size = 0;
