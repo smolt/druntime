@@ -38,8 +38,8 @@ version( Solaris )
     import core.sys.solaris.sys.types;
 }
 
-// Use xyzzy.ThreadLocal to limp by on iOS without builtin TLS
-version (OSX) version (NoThreadLocalStorage) static import xyzzy = ldc.xyzzy;
+// Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+version (NoThreadLocalStorage) static import xyzzy = ldc.xyzzy;
 
 // this should be true for most architectures
 version = StackGrowsDown;
@@ -1365,13 +1365,15 @@ private:
     //
     // Local storage
     //
+    version (NoThreadLocalStorage)
+    {
+        // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+        __gshared xyzzy.ThreadLocal!Thread sm_this;
+    }
+    else
     version( OSX )
     {
-        // Until iOS gets TLS...
-        version (NoThreadLocalStorage)
-            __gshared xyzzy.ThreadLocal!Thread sm_this;
-        else
-            static Thread       sm_this;
+        static Thread       sm_this;
     }
     else version( Posix )
     {
@@ -1859,13 +1861,15 @@ extern (C) void thread_init()
 
     Thread.initLocks();
 
+    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+    version (NoThreadLocalStorage)
+    {
+        Thread.sm_this.init();
+        Fiber.sm_this.init();
+    }
+    else
     version( OSX )
     {
-        version (NoThreadLocalStorage)
-        {
-            Thread.sm_this.init();
-            Fiber.sm_this.init();
-        }
     }
     else version( Posix )
     {
@@ -1925,13 +1929,15 @@ extern (C) void thread_term()
 {
     Thread.termLocks();
 
+    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+    version (NoThreadLocalStorage)
+    {
+        Fiber.sm_this.cleanup();
+        Thread.sm_this.cleanup();
+    }
+    else
     version( OSX )
     {
-        version (NoThreadLocalStorage)
-        {
-            Fiber.sm_this.cleanup();
-            Thread.sm_this.cleanup();
-        }
     }
     else version( Posix )
     {
@@ -4929,7 +4935,7 @@ private:
         sm_this = f;
     }
 
-    // Until iOS gets TLS...
+    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
     version (NoThreadLocalStorage)
         __gshared xyzzy.ThreadLocal!Fiber sm_this;
     else
