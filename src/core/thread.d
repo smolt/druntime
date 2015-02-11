@@ -5088,6 +5088,12 @@ unittest
 
 version (unittest) version (WIP_FiberIssue)
 {
+    unittest
+    {
+        pragma(msg, "Issue with Fiber unittest that fails on multicore, probably\n"
+               "due to optimizing away some reads or writes.");
+    }
+
     /* The following unittest fails when there are multiple cores and some
        level of LDC optimization is turned on.  Known cases are:
        -O1 and above on iPhone 4 (cortex-a8, single core), works
@@ -5098,9 +5104,6 @@ version (unittest) version (WIP_FiberIssue)
        away is, beware of sharing the same Fiber between multiple cores.
        Fibers isolated to a given core are fine.
     */
-    pragma(msg, "Issue with Fiber unittest that fails on multicore, probably\n"
-           "due optimizing away some reads or writes.");
-
     extern(C) int sysctlbyname(const char *, void *, size_t *, void *, size_t);
 
     bool maybeSkipTest()
