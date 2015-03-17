@@ -25,3 +25,9 @@ version( i386 )
     alias uint        natural_t;
     alias natural_t   mach_port_t;
 }
+// dano - TODO: not sure this is correct
+version( ARM )
+{
+    alias uint        natural_t;
+    alias natural_t   mach_port_t;
+}

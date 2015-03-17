@@ -44,6 +44,32 @@ version( Solaris )
     import core.sys.solaris.sys.types;
 }
 
+version (WIP_FiberIssue)
+{
+    /* The "Multiple threads running separate fibers" unittest can fail when
+       there are multiple cores and some level of LDC optimization is turned
+       on.  Known cases are:
+
+       -O1 and above on iPhone 4 (cortex-a8, single core), works
+       -O1 and above on iPad min (cortex-a9, dual core), fails
+       -O0, works for both single and dual core
+
+       The failure is a bad PC after a context switch, usually 0.  The take
+       away is, beware of sharing the same Fiber between multiple threads.
+       Fibers isolated to a given thread are fine.
+
+       A workaround here is to pretend like we don't have TLS in this module.
+       That does not solve other users of TLS in Fibers.  See:
+
+       https://github.com/ldc-developers/ldc/issues/666
+    */
+    pragma(msg, "LDC Issue #666 with Fibers called by multiple threads");
+    version = NoThreadLocalStorage;
+}
+
+// Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+version (NoThreadLocalStorage) static import xyzzy = ldc.xyzzy;
+
 // this should be true for most architectures
 version = StackGrowsDown;
 
@@ -373,7 +399,8 @@ else version( Posix )
         //
         __gshared sem_t suspendCount;
 
-
+        // TODO: thread_suspendHandler and thread_resumeHandler not used for
+        // OSX/iOS - should they be versioned out?
         extern (C) void thread_suspendHandler( int sig ) nothrow
         in
         {
@@ -1362,6 +1389,12 @@ private:
     //
     // Local storage
     //
+    version (NoThreadLocalStorage)
+    {
+        // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+        __gshared xyzzy.ThreadLocal!Thread sm_this;
+    }
+    else
     version( OSX )
     {
         static Thread       sm_this;
@@ -1526,6 +1559,8 @@ private:
     }
     else version( OSX )
     {
+      // TODO: find out why are m_reg explicitly scanned on Windows but not
+      // OSX?
       version( X86 )
       {
         uint[8]         m_reg; // edi,esi,ebp,esp,ebx,edx,ecx,eax
@@ -1534,6 +1569,10 @@ private:
       {
         ulong[16]       m_reg; // rdi,rsi,rbp,rsp,rbx,rdx,rcx,rax
                                // r8,r9,r10,r11,r12,r13,r14,r15
+      }
+      else version (ARM)
+      {
+          uint[16]      m_reg; // r0-r15
       }
       else
       {
@@ -1916,6 +1955,13 @@ extern (C) void thread_init()
 
     Thread.initLocks();
 
+    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+    version (NoThreadLocalStorage)
+    {
+        Thread.sm_this.init();
+        Fiber.sm_this.init();
+    }
+    else
     version( OSX )
     {
     }
@@ -1987,6 +2033,13 @@ extern (C) void thread_term()
 {
     Thread.termLocks();
 
+    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+    version (NoThreadLocalStorage)
+    {
+        Fiber.sm_this.cleanup();
+        Thread.sm_this.cleanup();
+    }
+    else
     version( OSX )
     {
     }
@@ -2275,6 +2328,9 @@ shared static ~this()
 // Used for needLock below.
 private __gshared bool multiThreadedFlag = false;
 
+// TODO: later do asm version as will be easier to maintain
+//version (ARM) version = ExternStackShell;
+
 version (ExternStackShell)
 {
     extern(D) public void callWithStackShell(scope void delegate(void* sp) nothrow fn) nothrow;
@@ -2423,17 +2479,32 @@ else
             // Callee-save registers, according to AAPCS, section 5.1.1.
             // FIXME: As loads/stores are explicit on ARM, the code generated for
             // this is horrible. Better write the entire function in ASM.
-            size_t[8] regs = void;
-            __asm("str  r4, $0", "=*m", regs.ptr + 0);
-            __asm("str  r5, $0", "=*m", regs.ptr + 1);
-            __asm("str  r6, $0", "=*m", regs.ptr + 2);
-            __asm("str  r7, $0", "=*m", regs.ptr + 3);
-            __asm("str  r8, $0", "=*m", regs.ptr + 4);
-            __asm("str  r9, $0", "=*m", regs.ptr + 5);
-            __asm("str r10, $0", "=*m", regs.ptr + 6);
-            __asm("str r11, $0", "=*m", regs.ptr + 7);
 
-            __asm("str sp, $0", "=*m", &sp);
+            // ARM_Thumb1 isn't predeclared in the compiler but could be based
+            // on arm arch.
+            version (ARM_Thumb1)
+            {
+                size_t[4] regs = void;
+                __asm("str  r4, $0", "=*m", regs.ptr + 0);
+                __asm("str  r5, $0", "=*m", regs.ptr + 1);
+                __asm("str  r6, $0", "=*m", regs.ptr + 2);
+                __asm("str  r7, $0", "=*m", regs.ptr + 3);
+                __asm("mov $1, sp;str $1, $0", "=*m,~r", &sp);
+            }
+            else // arm and thumb2 instructions
+            {
+                size_t[8] regs = void;
+                __asm("str  r4, $0", "=*m", regs.ptr + 0);
+                __asm("str  r5, $0", "=*m", regs.ptr + 1);
+                __asm("str  r6, $0", "=*m", regs.ptr + 2);
+                __asm("str  r7, $0", "=*m", regs.ptr + 3);
+                __asm("str  r8, $0", "=*m", regs.ptr + 4);
+                __asm("str  r9, $0", "=*m", regs.ptr + 5);
+                __asm("str r10, $0", "=*m", regs.ptr + 6);
+                __asm("str r11, $0", "=*m", regs.ptr + 7);
+
+                __asm("str sp, $0", "=*m", &sp);
+            }
         }
         else version (MIPS64)
         {
@@ -2597,6 +2668,25 @@ private void suspend( Thread t ) nothrow
             t.m_reg[13] = state.r13;
             t.m_reg[14] = state.r14;
             t.m_reg[15] = state.r15;
+        }
+        else version (ARM)
+        {
+            arm_thread_state32_t    state = void;
+            mach_msg_type_number_t  count = ARM_THREAD_STATE32_COUNT;
+
+            // Thought this would be ARM_THREAD_STATE32, but that fails.
+            // Mystery
+            if( thread_get_state( t.m_tmach, ARM_THREAD_STATE, &state, &count ) != KERN_SUCCESS )
+                onThreadError( "Unable to load thread state" );
+            // TODO: in past, ThreadException here recurses forever!  Does it
+            //still using onThreadError?
+            //printf("state count %d (expect %d)\n", count ,ARM_THREAD_STATE32_COUNT);
+            if( !t.m_lock )
+                t.m_curr.tstack = cast(void*) state.sp;
+            t.m_reg[0..13] = state.r;  // r0 - r13
+            t.m_reg[13] = state.sp;
+            t.m_reg[14] = state.lr;
+            t.m_reg[15] = state.pc;
         }
         else
         {
@@ -3185,6 +3275,8 @@ private void* getStackTop() nothrow
         {
             return __asm!(void *)("move $0, $$sp", "=r");
         }
+        // TODO - could add ARM version "mov $0,sp" "=r" to use instead of
+        // llvm_frame_address
         else
         {
             import ldc.intrinsics;
@@ -5011,6 +5103,10 @@ private:
         sm_this = f;
     }
 
+    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
+    version (NoThreadLocalStorage)
+        __gshared xyzzy.ThreadLocal!Fiber sm_this;
+    else
     static Fiber sm_this;
 
 

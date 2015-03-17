@@ -2492,7 +2492,7 @@ struct TickDuration
                 if(mach_timebase_info(&info))
                     ticksPerSec = 0;
                 else
-                    ticksPerSec = (1_000_000_000 * info.numer) / info.denom;
+                    ticksPerSec = (1_000_000_000 * info.denom) / info.numer;
             }
             else
                 ticksPerSec = 1_000_000;

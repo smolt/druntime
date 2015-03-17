@@ -10,7 +10,8 @@
  * Authors:   David Nadlinger
  */
 
-#ifdef __arm__
+// These are not needed for iOS
+#if defined(__arm__) && !defined(__APPLE__)
 
 #include <unwind.h>
 

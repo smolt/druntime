@@ -326,7 +326,9 @@ else version( LDC )
         llvm_atomic_store!Int(*newPtr, target, ordering);
     }
 
-    void atomicFence() nothrow
+    // Note: changed atomicFence to a template so compiler will inline intrinsic.
+    // Official druntime verison is non-template
+    void atomicFence()() nothrow
     {
         llvm_memory_fence();
     }
@@ -1585,6 +1587,7 @@ version( unittest )
         {
             while (!*f)
             {
+                atomicFence();
             }
 
             atomicFence();
