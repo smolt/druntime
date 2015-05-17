@@ -44,7 +44,8 @@ version( Solaris )
     import core.sys.solaris.sys.types;
 }
 
-version (WIP_FiberIssue)
+//version (WIP_FiberIssue)
+version (OSX)
 {
     /* The "Multiple threads running separate fibers" unittest can fail when
        there are multiple cores and some level of LDC optimization is turned
