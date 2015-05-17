@@ -151,7 +151,7 @@ else version ( ARM )
 
     struct arm_thread_state32_t
     {
-	uint r[13];                      // r0-r12
+	uint[13] r;                      // r0-r12
 	uint sp;                         // r13 (stack ptr)
 	uint lr;                         // r14 (link register)
 	uint pc;                         // r15 (program counter)
@@ -160,7 +160,7 @@ else version ( ARM )
 
     struct arm_thread_state64_t
     {
-	ulong x[29];                      // x0-x28
+	ulong[29] x;                      // x0-x28
 	ulong fp;                         // x29 (frame ptr)
 	ulong lr;                         // x30 (link register)
 	ulong sp;                         // x31 (stack ptr)

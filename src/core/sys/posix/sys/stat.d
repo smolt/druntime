@@ -615,7 +615,7 @@ else version( OSX )
             uint        st_flags;
             uint        st_gen;
             int         st_lspare;
-            long        st_qspare[2];
+            long[2]     st_qspare;
         }
     }
     else // ! version (DARWIN_USE_64_BIT_INODE_IOS)
