@@ -3792,6 +3792,72 @@ private
 }
 
 
+// Fiber support for SjLj style exceptions
+//
+// Exception handling based on setjmp/longjmp tracks the unwind points with a
+// linked list stack managed by _Unwind_SjLj_Register and
+// _Unwind_SjLj_Unregister.  In the context of Fibers, the stack needs to be
+// Fiber local, otherwise unwinding could weave through functions on other
+// Fibers as opposed to just the current Fiber.  The solution is to give each
+// Fiber has a m_sjljExStackTop.
+//
+// Two implementations known to have this SjLj stack design are GCC's libgcc
+// and darwin libunwind for ARM (iOS).  Functions to get/set the current SjLj
+// stack are named differently in each implmentation:
+//
+// https://github.com/gcc-mirror/gcc/blob/master/libgcc/unwind-sjlj.c
+//
+// libgcc
+//   struct SjLj_Function_Context* _Unwind_SjLj_GetContext(void)
+//   void _Unwind_SjLj_SetContext(struct SjLj_Function_Context *fc)
+//
+// http://www.opensource.apple.com/source/libunwind/libunwind-30/src/Unwind-sjlj.c
+//
+// darwin (OS X)
+//   _Unwind_FunctionContext* __Unwind_SjLj_GetTopOfFunctionStack();
+//   void __Unwind_SjLj_SetTopOfFunctionStack(_Unwind_FunctionContext* fc);
+//
+// These functions are not extern but if we peek at the implementations it
+// turns out that _Unwind_SjLj_Register and _Unwind_SjLj_Unregister can
+// manipulate the stack as we need.
+
+version( OSX ) version( ARM ) version = SjLj_Exceptions;
+version( GNU_SjLj_Exceptions ) version = Sjlj_Exceptions;
+
+version( SjLj_Exceptions )
+private
+{
+    // libgcc struct SjLj_Function_Context and darwin struct
+    // _Unwind_FunctionContext have same initial layout so can get away with
+    // one type to mimic header of both here.
+    struct SjLjFuncContext
+    {
+        SjLjFuncContext* prev;
+        // rest of this struc we don't care about in swapSjLjStackTop below.
+    }
+
+    extern(C) @nogc nothrow
+    {
+        void _Unwind_SjLj_Register(SjLjFuncContext* fc);
+        void _Unwind_SjLj_Unregister(SjLjFuncContext* fc);
+    }
+
+    // Swap in a new stack top, returning the previous one
+    SjLjFuncContext* swapSjLjStackTop(SjLjFuncContext* newtop) @nogc nothrow
+    {
+        // register a dummy context to retrieve stack top, then plop our new
+        // stack top in its place before unregistering, making it the new top.
+        SjLjFuncContext fc;
+        _Unwind_SjLj_Register(&fc);
+
+        SjLjFuncContext* prevtop = fc.prev;
+        fc.prev = newtop;
+        _Unwind_SjLj_Unregister(&fc);
+
+        return prevtop;
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Fiber
 ///////////////////////////////////////////////////////////////////////////////
@@ -4338,6 +4404,10 @@ private:
     Throwable           m_unhandled;
     State               m_state;
 
+    version( SjLj_Exceptions )
+    {
+        SjLjFuncContext* m_sjljExStackTop;
+    }
 
 private:
     ///////////////////////////////////////////////////////////////////////////
@@ -4982,6 +5052,9 @@ private:
         void**  oldp = &tobj.m_curr.tstack;
         void*   newp = m_ctxt.tstack;
 
+        version( SjLj_Exceptions )
+            SjLjFuncContext* oldsjlj = swapSjLjStackTop(m_sjljExStackTop);
+
         // NOTE: The order of operations here is very important.  The current
         //       stack top must be stored before m_lock is set, and pushContext
         //       must not be called until after m_lock is set.  This process
@@ -5004,6 +5077,9 @@ private:
         tobj.popContext();
         atomicStore!(MemoryOrder.raw)(*cast(shared)&tobj.m_lock, false);
         tobj.m_curr.tstack = tobj.m_curr.bstack;
+
+        version( SjLj_Exceptions )
+            m_sjljExStackTop = swapSjLjStackTop(oldsjlj);
     }
 
 
