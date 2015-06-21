@@ -3131,6 +3131,10 @@ private void* getStackTop() nothrow
         {
             return __asm!(void *)("movq %rsp, $0", "=r");
         }
+        else version (ARM)
+        {
+            return __asm!(void *)("mov $0, sp", "=r");
+        }
         else version (PPC)
         {
             return __asm!(void *)("mr $0, 1", "=r");
@@ -3147,8 +3151,6 @@ private void* getStackTop() nothrow
         {
             return __asm!(void *)("move $0, $$sp", "=r");
         }
-        // TODO - could add ARM version "mov $0,sp" "=r" to use instead of
-        // llvm_frame_address
         else
         {
             import ldc.intrinsics;
