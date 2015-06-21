@@ -38,32 +38,6 @@ version( Solaris )
     import core.sys.solaris.sys.types;
 }
 
-version (WIP_FiberIssue)
-{
-    /* The "Multiple threads running separate fibers" unittest can fail when
-       there are multiple cores and some level of LDC optimization is turned
-       on.  Known cases are:
-
-       -O1 and above on iPhone 4 (cortex-a8, single core), works
-       -O1 and above on iPad min (cortex-a9, dual core), fails
-       -O0, works for both single and dual core
-
-       The failure is a bad PC after a context switch, usually 0.  The take
-       away is, beware of sharing the same Fiber between multiple threads.
-       Fibers isolated to a given thread are fine.
-
-       A workaround here is to pretend like we don't have TLS in this module.
-       That does not solve other users of TLS in Fibers.  See:
-
-       https://github.com/ldc-developers/ldc/issues/666
-    */
-    pragma(msg, "LDC Issue #666 with Fibers called by multiple threads");
-    version = NoThreadLocalStorage;
-}
-
-// Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-version (NoThreadLocalStorage) static import xyzzy = ldc.xyzzy;
-
 // this should be true for most architectures
 version = StackGrowsDown;
 
@@ -1388,12 +1362,6 @@ private:
     //
     // Local storage
     //
-    version (NoThreadLocalStorage)
-    {
-        // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-        __gshared xyzzy.ThreadLocal!Thread sm_this;
-    }
-    else
     version( OSX )
     {
         static Thread       sm_this;
@@ -1884,13 +1852,6 @@ extern (C) void thread_init()
 
     Thread.initLocks();
 
-    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-    version (NoThreadLocalStorage)
-    {
-        Thread.sm_this.init();
-        Fiber.sm_this.init();
-    }
-    else
     version( OSX )
     {
     }
@@ -1952,13 +1913,6 @@ extern (C) void thread_term()
 {
     Thread.termLocks();
 
-    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-    version (NoThreadLocalStorage)
-    {
-        Fiber.sm_this.cleanup();
-        Thread.sm_this.cleanup();
-    }
-    else
     version( OSX )
     {
     }
@@ -3791,6 +3745,14 @@ private
     }
 }
 
+// Detect when a Fiber migrates between Threads for systems in which it may be
+// unsafe to do so.  A unittest below helps decide if CheckFiberMigration
+// should be set for your system.
+
+version( LDC )
+{
+    version( OSX ) version( ARM ) version = CheckFiberMigration;
+}
 
 // Fiber support for SjLj style exceptions
 //
@@ -4258,6 +4220,39 @@ class Fiber
         return m_state;
     }
 
+    /**
+     * Return true if migrating a Fiber between Threads is unsafe on this
+     * system.  This is due to compiler optimizations that cache thread local
+     * variable addresses because if Fiber.yield() returns on a different
+     * Thread, the addresses refer to the previous Threads variables.
+     */
+    static @property bool migrationUnsafe()
+    {
+        version( CheckFiberMigration )
+            return true;
+        else
+            return false;
+    }
+
+    /**
+     * Allow this Fiber to be resumed on a different thread for systems where
+     * Fiber migration is unsafe (migrationUnsafe() is true).  Otherwise the
+     * first time a Fiber is resumed on a different Thread, a FiberException
+     * is thrown.  This provides the programmer a reminder to be careful and
+     * helps detect such usage in libraries being ported from other systems.
+     *
+     * Fiber migration on such systems can be done safely if you control all
+     * the code and know that thread locals are not involved.
+     *
+     * For systems without this issue, allowMigration does nothing, as you are
+     * always free to migrate.
+     */
+    final void allowMigration()
+    {
+        // Does nothing if checking is disabled
+        version( CheckFiberMigration )
+            m_allowMigration = true;
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     // Actions on Calling Fiber
@@ -4403,6 +4398,14 @@ private:
     bool                m_isRunning;
     Throwable           m_unhandled;
     State               m_state;
+
+    // Set first time switchIn called to indicate this Fiber's Thread
+    Thread              m_curThread;
+
+    version( CheckFiberMigration )
+    {
+        bool m_allowMigration;
+    }
 
     version( SjLj_Exceptions )
     {
@@ -5030,10 +5033,6 @@ private:
         sm_this = f;
     }
 
-    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-    version (NoThreadLocalStorage)
-        __gshared xyzzy.ThreadLocal!Fiber sm_this;
-    else
     static Fiber sm_this;
 
 
@@ -5051,6 +5050,23 @@ private:
         Thread  tobj = Thread.getThis();
         void**  oldp = &tobj.m_curr.tstack;
         void*   newp = m_ctxt.tstack;
+
+        version( CheckFiberMigration )
+        {
+            if (m_curThread is null || m_allowMigration)
+                m_curThread = tobj;
+            else if (tobj !is m_curThread)
+            {
+                throw new FiberException
+                    ("Migrating Fibers between Threads on this platform may lead "
+                     "to incorrect thread local variable access.  To allow "
+                     "migration anyway, call Fiber.allowMigration()");
+            }
+        }
+        else
+        {
+            m_curThread = tobj;
+        }
 
         version( SjLj_Exceptions )
             SjLjFuncContext* oldsjlj = swapSjLjStackTop(m_sjljExStackTop);
@@ -5088,7 +5104,7 @@ private:
     //
     final void switchOut()
     {
-        Thread  tobj = Thread.getThis();
+        Thread  tobj = m_curThread;
         void**  oldp = &m_ctxt.tstack;
         void*   newp = tobj.m_curr.within.tstack;
 
@@ -5113,7 +5129,7 @@ private:
         // NOTE: If use of this fiber is multiplexed across threads, the thread
         //       executing here may be different from the one above, so get the
         //       current thread handle before unlocking, etc.
-        tobj = Thread.getThis();
+        tobj = m_curThread;
         atomicStore!(MemoryOrder.raw)(*cast(shared)&tobj.m_lock, false);
         tobj.m_curr.tstack = tobj.m_curr.bstack;
     }
@@ -5186,6 +5202,74 @@ unittest
     group.joinAll();
 }
 
+// Try to detect if version CheckFiberMigration should be set, or if it is
+// set, make sure it behaves properly.  The issue is that thread local addr
+// may be cached by the compiler and that doesn't play well when Fibers
+// migrate between Threads.  This has been seen with and without optimization
+// enabled.  For that reason, should run this unittest with various
+// optimization levels.
+//
+// https://github.com/ldc-developers/ldc/issues/666
+unittest
+{
+    static int tls;
+
+    auto f = new Fiber(
+    {
+        ++tls;                               // happens on main thread
+        assert(tls == 1);
+        Fiber.yield();
+        ++tls;                               // happens on other thread,
+        // 1 if tls addr uncached, 2 if addr was cached
+    });
+
+    auto t = new Thread(
+    {
+        assert(tls == 0);
+
+        version( CheckFiberMigration )
+        {
+            try
+            {
+                f.call();
+                assert(false, "Should get FiberException when Fiber migrated");
+            }
+            catch (FiberException ex)
+            {
+            }
+
+            f.allowMigration();
+        }
+
+        f.call();
+        // tls may be 0 (wrong) or 1 (good) depending on thread local handling
+        // by compiler
+    });
+
+    assert(tls == 0);
+    f.call();
+    assert(tls == 1);
+
+    t.start();
+    t.join();
+
+    version( CheckFiberMigration )
+    {
+        assert(Fiber.migrationUnsafe);
+    }
+    else
+    {
+        assert(!Fiber.migrationUnsafe);
+        // If thread local addr not cached (correct behavior), then tls should
+        // still be 1.
+        assert(tls != 2,
+               "Not safe to migrate Fibers between Threads on your system. "
+               "Consider setting version CheckFiberMigration for this system "
+               "in thread.d");
+        // verify un-cached correct case
+        assert(tls == 1);
+    }
+}
 
 // Multiple threads running shared fibers
 unittest
@@ -5220,6 +5304,7 @@ unittest
     foreach(ref fib; fibs)
     {
         fib = new TestFiber();
+        fib.allowMigration();
     }
 
     auto group = new ThreadGroup();
