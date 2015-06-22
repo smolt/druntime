@@ -20,6 +20,9 @@ nothrow:
 version (PPC)   version = PPC_Any;
 version (PPC64) version = PPC_Any;
 
+version (X86) version = X86_Any;
+version (X86_64) version = X86_Any;
+
 version( Windows )
 {
     struct fenv_t
@@ -270,3 +273,24 @@ int fesetround(int round);
 void fegetenv(fenv_t* envp);
 void fesetenv(in fenv_t* envp);
 void feupdateenv(in fenv_t* envp);
+
+version(LDC)
+{
+    void FORCE_EVAL(T)(T x) @nogc nothrow
+    {
+        import std.traits, ldc.llvmasm;
+        static if (isFloatingPoint!(T))
+        {
+            version (ARM)
+                __asm("", "w", x);
+            else version (AArch64)
+                     __asm("", "w", x);
+            else version (X86_Any)
+                     __asm("", "f", x);
+            else
+                static assert(false, "Not implemented for this architecture");
+        }
+        else
+            __asm("", "r", x);
+    }
+}
