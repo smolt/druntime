@@ -10,8 +10,7 @@
  * Authors:   David Nadlinger
  */
 
-// These are not needed for iOS
-#if defined(__arm__) && !defined(__APPLE__)
+#if defined(__arm__) && !defined(__USING_SJLJ_EXCEPTIONS__)
 
 #include <unwind.h>
 
