@@ -31,14 +31,6 @@ version( X86_64 )
         enum isVectorType = true;
     }
 
-    // Layout of this struct must match __gnuc_va_list for C ABI compatibility
-    struct __va_list_tag
-    {
-        uint offset_regs = 6 * 8;            // no regs
-        uint offset_fpregs = 6 * 8 + 8 * 16; // no fp regs
-        void* stack_args;
-        void* reg_args;
-    }
     alias __va_list = __va_list_tag;
 
     void va_arg_x86_64(T)(__va_list *ap, ref T parmn)
@@ -311,7 +303,14 @@ version( LDC )
     // struct passed by reference. We define va_list as a raw pointer
     // (to the actual struct) for the byref semantics and allocate
     // the struct in LDC's va_start and va_copy intrinsics.
-    alias char* va_list;
+    version (SystemV_AMD64)
+    {
+        alias va_list = __va_list_tag*;
+    }
+    else
+    {
+        alias va_list = char*;
+    }
 
     pragma(LDC_va_start)
         void va_start(T)(va_list ap, ref T);
@@ -329,13 +328,26 @@ version( LDC )
         }
         else version( Win64 )
         {
-            // passed by reference if > 64 bits or of a size that is not a power of 2
-            static if (T.sizeof > size_t.sizeof || (T.sizeof & (T.sizeof - 1)) != 0)
-                T arg = **cast(T**)ap;
+            // dynamic arrays are passed as 2 separate 64-bit values
+            import std.traits: isDynamicArray;
+            static if (isDynamicArray!T)
+            {
+                auto length = *cast(size_t*)ap;
+                ap += size_t.sizeof;
+                auto ptr = *cast(typeof(T.init.ptr)*)ap;
+                ap += size_t.sizeof;
+                return ptr[0..length];
+            }
             else
-                T arg = *cast(T*)ap;
-            ap += size_t.sizeof;
-            return arg;
+            {
+                // passed as byval reference if > 64 bits or of a size that is not a power of 2
+                static if (T.sizeof > size_t.sizeof || (T.sizeof & (T.sizeof - 1)) != 0)
+                    T arg = **cast(T**)ap;
+                else
+                    T arg = *cast(T*)ap;
+                ap += size_t.sizeof;
+                return arg;
+            }
         }
         else version( X86 )
         {
@@ -344,6 +356,18 @@ version( LDC )
             return arg;
         }
         else version( ARM )
+        {
+            T arg = *cast(T*)ap;
+            ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
+            return arg;
+        }
+        else version( AnyPPC )
+        {
+            T arg = *cast(T*)ap;
+            ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
+            return arg;
+        }
+        else version( MIPS64 )
         {
             T arg = *cast(T*)ap;
             ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
@@ -361,11 +385,20 @@ version( LDC )
         }
         else version( Win64 )
         {
-            static if (T.sizeof > size_t.sizeof || (T.sizeof & (T.sizeof - 1)) != 0)
-                parmn = **cast(T**)ap;
-            else
+            import std.traits: isDynamicArray;
+            static if (isDynamicArray!T)
+            {
                 parmn = *cast(T*)ap;
-            ap += size_t.sizeof;
+                ap += T.sizeof;
+            }
+            else
+            {
+                static if (T.sizeof > size_t.sizeof || (T.sizeof & (T.sizeof - 1)) != 0)
+                    parmn = **cast(T**)ap;
+                else
+                    parmn = *cast(T*)ap;
+                ap += size_t.sizeof;
+            }
         }
         else version( X86 )
         {
@@ -401,8 +434,18 @@ version( LDC )
         }
         else version( Win64 )
         {
-            auto p = (tsize > size_t.sizeof || (tsize & (tsize - 1)) != 0) ? *cast(char**)ap : ap;
-            ap += size_t.sizeof;
+            char* p;
+            auto ti_dynArray = cast(TypeInfo_Array) ti;
+            if (ti_dynArray !is null)
+            {
+                p = ap;
+                ap += tsize;
+            }
+            else
+            {
+                p = (tsize > size_t.sizeof || (tsize & (tsize - 1)) != 0) ? *cast(char**)ap : ap;
+                ap += size_t.sizeof;
+            }
         }
         else version( ARM )
         {
