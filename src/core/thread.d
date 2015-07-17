@@ -1532,6 +1532,10 @@ private:
         ulong[16]       m_reg; // rdi,rsi,rbp,rsp,rbx,rdx,rcx,rax
                                // r8,r9,r10,r11,r12,r13,r14,r15
       }
+      else version (AArch64)
+      {
+          uint[33]      m_reg; // x0-x31, pc
+      }
       else version (ARM)
       {
           uint[16]      m_reg; // r0-r15
@@ -2295,6 +2299,28 @@ else
 
             __asm("std   1, $0", "=*m", &sp);
         }
+        else version (AArch64)
+        {
+            import ldc.llvmasm;
+
+            // Callee-save registers, according to AAPCS64, section 5.1.1.
+            // FIXME: As loads/stores are explicit on ARM, the code generated for
+            // this is horrible. Better write the entire function in ASM.
+            size_t[11] regs = void;
+            __asm("str x19, $0", "=*m", regs.ptr + 0);
+            __asm("str x20, $0", "=*m", regs.ptr + 1);
+            __asm("str x21, $0", "=*m", regs.ptr + 2);
+            __asm("str x22, $0", "=*m", regs.ptr + 3);
+            __asm("str x23, $0", "=*m", regs.ptr + 4);
+            __asm("str x24, $0", "=*m", regs.ptr + 5);
+            __asm("str x25, $0", "=*m", regs.ptr + 6);
+            __asm("str x26, $0", "=*m", regs.ptr + 7);
+            __asm("str x27, $0", "=*m", regs.ptr + 8);
+            __asm("str x28, $0", "=*m", regs.ptr + 9);
+            __asm("str x29, $0", "=*m", regs.ptr + 10);
+
+            __asm("str x31, $0", "=*m", &sp);
+        }
         else version (ARM)
         {
             import ldc.llvmasm;
@@ -2491,6 +2517,27 @@ private void suspend( Thread t ) nothrow
             t.m_reg[13] = state.r13;
             t.m_reg[14] = state.r14;
             t.m_reg[15] = state.r15;
+        }
+        else version (AArch64)
+        {
+            // Totally a TODO:
+            arm_thread_state64_t    state = void;
+            mach_msg_type_number_t  count = ARM_THREAD_STATE64_COUNT;
+
+            // TODO: this was comment for ARM.  Have to verify
+            // Thought this would be ARM_THREAD_STATE64, but that fails.
+            // Mystery
+            if( thread_get_state( t.m_tmach, ARM_THREAD_STATE, &state, &count ) != KERN_SUCCESS )
+                onThreadError( "Unable to load thread state" );
+            // TODO: in past, ThreadException here recurses forever!  Does it
+            //still using onThreadError?
+            //printf("state count %d (expect %d)\n", count ,ARM_THREAD_STATE64_COUNT);
+            if( !t.m_lock )
+                t.m_curr.tstack = cast(void*) state.sp;
+            t.m_reg[0..30] = state.r;  // x0-x29
+            t.m_reg[30] = state.sp;    // x30
+            t.m_reg[31] = state.lr;    // x31
+            t.m_reg[32] = state.pc;
         }
         else version (ARM)
         {
@@ -3085,6 +3132,10 @@ private void* getStackTop() nothrow
         {
             return __asm!(void *)("movq %rsp, $0", "=r");
         }
+        else version (AArch64)
+        {
+            return __asm!(void *)("mov $0, sp", "=r");
+        }
         else version (ARM)
         {
             return __asm!(void *)("mov $0, sp", "=r");
@@ -3455,6 +3506,15 @@ private
         version( Posix )
         {
             version = AsmMIPS_O32_Posix;
+            version = AsmExternal;
+        }
+    }
+    else version( AArch64 )
+    {
+        // TODO: This is totally wrong - but gets us to compile
+        version( Posix )
+        {
+            version = AsmARM_Posix;
             version = AsmExternal;
         }
     }

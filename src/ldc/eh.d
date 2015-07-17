@@ -36,12 +36,13 @@ version (ARM)
 {
     // FIXME: Almost certainly wrong.
     version (linux) version = GCC_UNWIND;
-    version (darwin) version = GCC_UNWIND_SJLJ; // iOS
+    version (OSX) version = GCC_UNWIND_SJLJ; // iOS
     version (FreeBSD) version = GCC_UNWIND;
 }
 version (AArch64)
 {
     version (linux) version = GCC_UNWIND;
+    version (OSX) version = GCC_UNWIND;
 }
 version (PPC_Any)
 {

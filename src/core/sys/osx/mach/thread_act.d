@@ -24,6 +24,10 @@ version( X86 )
     version = i386;
 version( X86_64 )
     version = i386;
+version( ARM )
+    version = ARM_Any;
+version( AArch64 )
+    version = ARM_Any;
 version( i386 )
 {
     alias mach_port_t thread_act_t;
@@ -125,7 +129,7 @@ version( i386 )
     kern_return_t thread_resume(thread_act_t);
     kern_return_t thread_get_state(thread_act_t, thread_state_flavor_t, thread_state_t*, mach_msg_type_number_t*);
 }
-else version ( ARM )
+else version ( ARM_Any )
 {
     alias mach_port_t thread_act_t;
     alias void        thread_state_t;
