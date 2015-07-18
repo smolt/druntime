@@ -576,9 +576,7 @@ else version( OSX )
     // iOS always uses 64-bit inode with normal stat() function (there is no
     // stat64).  MacOS I think uses stat$INODE64 for 64-bit.  Anyway, I am
     // only focusing on iOS, so will not type to meld with MacOS below.
-    version (ARM) version = DARWIN_USE_64_BIT_INODE_IOS;
-
-    version (DARWIN_USE_64_BIT_INODE_IOS)
+    version (IPhoneOS)
     {
         struct stat_t
         {
@@ -618,7 +616,7 @@ else version( OSX )
             long[2]     st_qspare;
         }
     }
-    else // ! version (DARWIN_USE_64_BIT_INODE_IOS)
+    else // !version (IPhoneOS)
     {
     struct stat_t
     {

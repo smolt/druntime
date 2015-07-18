@@ -38,39 +38,6 @@ version( Solaris )
     import core.sys.solaris.sys.types;
 }
 
-version( Solaris )
-{
-    import core.sys.solaris.sys.priocntl;
-    import core.sys.solaris.sys.types;
-}
-
-//version (WIP_FiberIssue)
-version (OSX)
-{
-    /* The "Multiple threads running separate fibers" unittest can fail when
-       there are multiple cores and some level of LDC optimization is turned
-       on.  Known cases are:
-
-       -O1 and above on iPhone 4 (cortex-a8, single core), works
-       -O1 and above on iPad min (cortex-a9, dual core), fails
-       -O0, works for both single and dual core
-
-       The failure is a bad PC after a context switch, usually 0.  The take
-       away is, beware of sharing the same Fiber between multiple threads.
-       Fibers isolated to a given thread are fine.
-
-       A workaround here is to pretend like we don't have TLS in this module.
-       That does not solve other users of TLS in Fibers.  See:
-
-       https://github.com/ldc-developers/ldc/issues/666
-    */
-    pragma(msg, "LDC Issue #666 with Fibers called by multiple threads");
-    version = NoThreadLocalStorage;
-}
-
-// Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-version (NoThreadLocalStorage) static import xyzzy = ldc.xyzzy;
-
 // this should be true for most architectures
 version = StackGrowsDown;
 
@@ -1395,12 +1362,6 @@ private:
     //
     // Local storage
     //
-    version (NoThreadLocalStorage)
-    {
-        // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-        __gshared xyzzy.ThreadLocal!Thread sm_this;
-    }
-    else
     version( OSX )
     {
         static Thread       sm_this;
@@ -1584,6 +1545,10 @@ private:
       {
         ulong[16]       m_reg; // rdi,rsi,rbp,rsp,rbx,rdx,rcx,rax
                                // r8,r9,r10,r11,r12,r13,r14,r15
+      }
+      else version (AArch64)
+      {
+          uint[33]      m_reg; // x0-x31, pc
       }
       else version (ARM)
       {
@@ -1970,13 +1935,6 @@ extern (C) void thread_init()
 
     Thread.initLocks();
 
-    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-    version (NoThreadLocalStorage)
-    {
-        Thread.sm_this.init();
-        Fiber.sm_this.init();
-    }
-    else
     version( OSX )
     {
     }
@@ -2054,13 +2012,6 @@ extern (C) void thread_term()
 {
     Thread.termLocks();
 
-    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-    version (NoThreadLocalStorage)
-    {
-        Fiber.sm_this.cleanup();
-        Thread.sm_this.cleanup();
-    }
-    else
     version( OSX )
     {
     }
@@ -2716,6 +2667,27 @@ private void suspend( Thread t ) nothrow
             t.m_reg[14] = state.r14;
             t.m_reg[15] = state.r15;
         }
+        else version (AArch64)
+        {
+            // Totally a TODO:
+            arm_thread_state64_t    state = void;
+            mach_msg_type_number_t  count = ARM_THREAD_STATE64_COUNT;
+
+            // TODO: this was comment for ARM.  Have to verify
+            // Thought this would be ARM_THREAD_STATE64, but that fails.
+            // Mystery
+            if( thread_get_state( t.m_tmach, ARM_THREAD_STATE, &state, &count ) != KERN_SUCCESS )
+                onThreadError( "Unable to load thread state" );
+            // TODO: in past, ThreadException here recurses forever!  Does it
+            //still using onThreadError?
+            //printf("state count %d (expect %d)\n", count ,ARM_THREAD_STATE64_COUNT);
+            if( !t.m_lock )
+                t.m_curr.tstack = cast(void*) state.sp;
+            t.m_reg[0..30] = state.r;  // x0-x29
+            t.m_reg[30] = state.sp;    // x30
+            t.m_reg[31] = state.lr;    // x31
+            t.m_reg[32] = state.pc;
+        }
         else version (ARM)
         {
             arm_thread_state32_t    state = void;
@@ -3312,7 +3284,7 @@ private void* getStackTop() nothrow
         }
         else version (ARM)
         {
-            return __asm!(void *)("mov $0, r13", "=r");
+            return __asm!(void *)("mov $0, sp", "=r");
         }
         else version (PPC)
         {
@@ -3330,8 +3302,6 @@ private void* getStackTop() nothrow
         {
             return __asm!(void *)("move $0, $$sp", "=r");
         }
-        // TODO - could add ARM version "mov $0,sp" "=r" to use instead of
-        // llvm_frame_address
         else
         {
             import ldc.intrinsics;
@@ -3683,6 +3653,15 @@ private
             version = AsmExternal;
         }
     }
+    else version( AArch64 )
+    {
+        // TODO: This is totally wrong - but gets us to compile
+        version( Posix )
+        {
+            version = AsmARM_Posix;
+            version = AsmExternal;
+        }
+    }
     else version( ARM )
     {
         version( Posix )
@@ -3971,6 +3950,80 @@ private
     }
 }
 
+// Detect when a Fiber migrates between Threads for systems in which it may be
+// unsafe to do so.  A unittest below helps decide if CheckFiberMigration
+// should be set for your system.
+
+version( LDC )
+{
+    version( OSX ) version( ARM ) version = CheckFiberMigration;
+}
+
+// Fiber support for SjLj style exceptions
+//
+// Exception handling based on setjmp/longjmp tracks the unwind points with a
+// linked list stack managed by _Unwind_SjLj_Register and
+// _Unwind_SjLj_Unregister.  In the context of Fibers, the stack needs to be
+// Fiber local, otherwise unwinding could weave through functions on other
+// Fibers as opposed to just the current Fiber.  The solution is to give each
+// Fiber has a m_sjljExStackTop.
+//
+// Two implementations known to have this SjLj stack design are GCC's libgcc
+// and darwin libunwind for ARM (iOS).  Functions to get/set the current SjLj
+// stack are named differently in each implmentation:
+//
+// https://github.com/gcc-mirror/gcc/blob/master/libgcc/unwind-sjlj.c
+//
+// libgcc
+//   struct SjLj_Function_Context* _Unwind_SjLj_GetContext(void)
+//   void _Unwind_SjLj_SetContext(struct SjLj_Function_Context *fc)
+//
+// http://www.opensource.apple.com/source/libunwind/libunwind-30/src/Unwind-sjlj.c
+//
+// darwin (OS X)
+//   _Unwind_FunctionContext* __Unwind_SjLj_GetTopOfFunctionStack();
+//   void __Unwind_SjLj_SetTopOfFunctionStack(_Unwind_FunctionContext* fc);
+//
+// These functions are not extern but if we peek at the implementations it
+// turns out that _Unwind_SjLj_Register and _Unwind_SjLj_Unregister can
+// manipulate the stack as we need.
+
+version( OSX ) version( ARM ) version = SjLj_Exceptions;
+version( GNU_SjLj_Exceptions ) version = Sjlj_Exceptions;
+
+version( SjLj_Exceptions )
+private
+{
+    // libgcc struct SjLj_Function_Context and darwin struct
+    // _Unwind_FunctionContext have same initial layout so can get away with
+    // one type to mimic header of both here.
+    struct SjLjFuncContext
+    {
+        SjLjFuncContext* prev;
+        // rest of this struc we don't care about in swapSjLjStackTop below.
+    }
+
+    extern(C) @nogc nothrow
+    {
+        void _Unwind_SjLj_Register(SjLjFuncContext* fc);
+        void _Unwind_SjLj_Unregister(SjLjFuncContext* fc);
+    }
+
+    // Swap in a new stack top, returning the previous one
+    SjLjFuncContext* swapSjLjStackTop(SjLjFuncContext* newtop) @nogc nothrow
+    {
+        // register a dummy context to retrieve stack top, then plop our new
+        // stack top in its place before unregistering, making it the new top.
+        SjLjFuncContext fc;
+        _Unwind_SjLj_Register(&fc);
+
+        SjLjFuncContext* prevtop = fc.prev;
+        fc.prev = newtop;
+        _Unwind_SjLj_Unregister(&fc);
+
+        return prevtop;
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Fiber
@@ -4393,6 +4446,39 @@ class Fiber
         return m_state;
     }
 
+    /**
+     * Return true if migrating a Fiber between Threads is unsafe on this
+     * system.  This is due to compiler optimizations that cache thread local
+     * variable addresses because if Fiber.yield() returns on a different
+     * Thread, the addresses refer to the previous Threads variables.
+     */
+    static @property bool migrationUnsafe() const nothrow
+    {
+        version( CheckFiberMigration )
+            return true;
+        else
+            return false;
+    }
+
+    /**
+     * Allow this Fiber to be resumed on a different thread for systems where
+     * Fiber migration is unsafe (migrationUnsafe() is true).  Otherwise the
+     * first time a Fiber is resumed on a different Thread, a FiberException
+     * is thrown.  This provides the programmer a reminder to be careful and
+     * helps detect such usage in libraries being ported from other systems.
+     *
+     * Fiber migration on such systems can be done safely if you control all
+     * the code and know that thread locals are not involved.
+     *
+     * For systems without this issue, allowMigration does nothing, as you are
+     * always free to migrate.
+     */
+    final void allowMigration() nothrow
+    {
+        // Does nothing if checking is disabled
+        version( CheckFiberMigration )
+            m_allowMigration = true;
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     // Actions on Calling Fiber
@@ -4539,6 +4625,18 @@ private:
     Throwable           m_unhandled;
     State               m_state;
 
+    // Set first time switchIn called to indicate this Fiber's Thread
+    Thread              m_curThread;
+
+    version( CheckFiberMigration )
+    {
+        bool m_allowMigration;
+    }
+
+    version( SjLj_Exceptions )
+    {
+        SjLjFuncContext* m_sjljExStackTop;
+    }
 
 private:
     ///////////////////////////////////////////////////////////////////////////
@@ -5158,10 +5256,6 @@ private:
         sm_this = f;
     }
 
-    // Experimental: Use xyzzy.ThreadLocal when D TLS is not available
-    version (NoThreadLocalStorage)
-        __gshared xyzzy.ThreadLocal!Fiber sm_this;
-    else
     static Fiber sm_this;
 
 
@@ -5179,6 +5273,26 @@ private:
         Thread  tobj = Thread.getThis();
         void**  oldp = &tobj.m_curr.tstack;
         void*   newp = m_ctxt.tstack;
+
+        version( CheckFiberMigration )
+        {
+            if (m_curThread is null || m_allowMigration)
+                m_curThread = tobj;
+            else if (tobj !is m_curThread)
+            {
+                throw new FiberException
+                    ("Migrating Fibers between Threads on this platform may lead "
+                     "to incorrect thread local variable access.  To allow "
+                     "migration anyway, call Fiber.allowMigration()");
+            }
+        }
+        else
+        {
+            m_curThread = tobj;
+        }
+
+        version( SjLj_Exceptions )
+            SjLjFuncContext* oldsjlj = swapSjLjStackTop(m_sjljExStackTop);
 
         // NOTE: The order of operations here is very important.  The current
         //       stack top must be stored before m_lock is set, and pushContext
@@ -5202,6 +5316,9 @@ private:
         tobj.popContext();
         atomicStore!(MemoryOrder.raw)(*cast(shared)&tobj.m_lock, false);
         tobj.m_curr.tstack = tobj.m_curr.bstack;
+
+        version( SjLj_Exceptions )
+            m_sjljExStackTop = swapSjLjStackTop(oldsjlj);
     }
 
 
@@ -5210,7 +5327,7 @@ private:
     //
     final void switchOut() nothrow
     {
-        Thread  tobj = Thread.getThis();
+        Thread  tobj = m_curThread;
         void**  oldp = &m_ctxt.tstack;
         void*   newp = tobj.m_curr.within.tstack;
 
@@ -5235,7 +5352,7 @@ private:
         // NOTE: If use of this fiber is multiplexed across threads, the thread
         //       executing here may be different from the one above, so get the
         //       current thread handle before unlocking, etc.
-        tobj = Thread.getThis();
+        tobj = m_curThread;
         atomicStore!(MemoryOrder.raw)(*cast(shared)&tobj.m_lock, false);
         tobj.m_curr.tstack = tobj.m_curr.bstack;
     }
@@ -5308,6 +5425,74 @@ unittest
     group.joinAll();
 }
 
+// Try to detect if version CheckFiberMigration should be set, or if it is
+// set, make sure it behaves properly.  The issue is that thread local addr
+// may be cached by the compiler and that doesn't play well when Fibers
+// migrate between Threads.  This has been seen with and without optimization
+// enabled.  For that reason, should run this unittest with various
+// optimization levels.
+//
+// https://github.com/ldc-developers/ldc/issues/666
+unittest
+{
+    static int tls;
+
+    auto f = new Fiber(
+    {
+        ++tls;                               // happens on main thread
+        assert(tls == 1);
+        Fiber.yield();
+        ++tls;                               // happens on other thread,
+        // 1 if tls addr uncached, 2 if addr was cached
+    });
+
+    auto t = new Thread(
+    {
+        assert(tls == 0);
+
+        version( CheckFiberMigration )
+        {
+            try
+            {
+                f.call();
+                assert(false, "Should get FiberException when Fiber migrated");
+            }
+            catch (FiberException ex)
+            {
+            }
+
+            f.allowMigration();
+        }
+
+        f.call();
+        // tls may be 0 (wrong) or 1 (good) depending on thread local handling
+        // by compiler
+    });
+
+    assert(tls == 0);
+    f.call();
+    assert(tls == 1);
+
+    t.start();
+    t.join();
+
+    version( CheckFiberMigration )
+    {
+        assert(Fiber.migrationUnsafe);
+    }
+    else
+    {
+        assert(!Fiber.migrationUnsafe);
+        // If thread local addr not cached (correct behavior), then tls should
+        // still be 1.
+        assert(tls != 2,
+               "Not safe to migrate Fibers between Threads on your system. "
+               "Consider setting version CheckFiberMigration for this system "
+               "in thread.d");
+        // verify un-cached correct case
+        assert(tls == 1);
+    }
+}
 
 // Multiple threads running shared fibers
 unittest
@@ -5342,6 +5527,7 @@ unittest
     foreach(ref fib; fibs)
     {
         fib = new TestFiber();
+        fib.allowMigration();
     }
 
     auto group = new ThreadGroup();
