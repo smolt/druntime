@@ -2241,7 +2241,7 @@ private:
         {
             mach_timebase_info_data_t info;
             if(mach_timebase_info(&info) == 0)
-                _ticksPerSecond = 1_000_000_000L * info.numer / info.denom;
+                _ticksPerSecond = (1_000_000_000 * info.denom) / info.numer;
         }
         else version(Posix)
         {
