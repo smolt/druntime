@@ -4232,7 +4232,7 @@ class Fiber
      * In:
      *  fn must not be null.
      */
-    this( void function() fn, size_t sz = PAGESIZE*4 ) nothrow
+    this( void function() fn, size_t sz = PAGESIZE*10 ) nothrow
     in
     {
         assert( fn );
@@ -4255,7 +4255,7 @@ class Fiber
      * In:
      *  dg must not be null.
      */
-    this( void delegate() dg, size_t sz = PAGESIZE*4 ) nothrow
+    this( void delegate() dg, size_t sz = PAGESIZE*10 ) nothrow
     in
     {
         assert( dg );
