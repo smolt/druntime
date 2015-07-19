@@ -166,7 +166,10 @@ else version( OSX )
         fdset.fds_bits[0 .. $] = 0;
     }
 
+    // Use -D_DARWIN_UNLIMITED_SELECT functions extensions that allow nfds > 1024
+    pragma(mangle, "pselect$DARWIN_EXTSN")
     int pselect(int, fd_set*, fd_set*, fd_set*, in timespec*, in sigset_t*);
+    pragma(mangle, "select$DARWIN_EXTSN")
     int select(int, fd_set*, fd_set*, fd_set*, timeval*);
 }
 else version( FreeBSD )
