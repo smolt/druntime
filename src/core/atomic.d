@@ -17,6 +17,16 @@ module core.atomic;
 
 version (LDC)
 {
+   version (IPhoneOS)
+    {
+         version (ARM)
+             enum has64BitCAS = false;
+         else version (X86)
+             enum has64BitCAS = false;
+         else
+             enum has64BitCAS = true;
+    }
+    else
     enum has64BitCAS = true;
     enum has128BitCAS = false;
 }
