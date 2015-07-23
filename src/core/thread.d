@@ -3751,7 +3751,12 @@ private
 
 version( LDC )
 {
-    version( OSX ) version( ARM ) version = CheckFiberMigration;
+    version( OSX )
+    {
+        version( ARM ) version = CheckFiberMigration;
+        version( X86 ) version = CheckFiberMigration;
+        version( X86_64 ) version = CheckFiberMigration;
+    }
 }
 
 // Fiber support for SjLj style exceptions
@@ -4223,8 +4228,8 @@ class Fiber
     /**
      * Return true if migrating a Fiber between Threads is unsafe on this
      * system.  This is due to compiler optimizations that cache thread local
-     * variable addresses because if Fiber.yield() returns on a different
-     * Thread, the addresses refer to the previous Threads variables.
+     * variable addresses.  When Fiber.yield() returns on a different
+     * Thread, the addresses refer to the previous Thread's variables.
      */
     static @property bool migrationUnsafe()
     {
@@ -5205,7 +5210,7 @@ unittest
 // Try to detect if version CheckFiberMigration should be set, or if it is
 // set, make sure it behaves properly.  The issue is that thread local addr
 // may be cached by the compiler and that doesn't play well when Fibers
-// migrate between Threads.  This has been seen with and without optimization
+// migrate between Threads.  This may only happen when optimization
 // enabled.  For that reason, should run this unittest with various
 // optimization levels.
 //
@@ -5214,11 +5219,17 @@ unittest
 {
     static int tls;
 
+    static yield_noinline()
+    {
+        import ldc.intrinsics;
+        pragma(LDC_never_inline);
+        Fiber.yield();
+    }
+
     auto f = new Fiber(
     {
         ++tls;                               // happens on main thread
-        assert(tls == 1);
-        Fiber.yield();
+        yield_noinline();
         ++tls;                               // happens on other thread,
         // 1 if tls addr uncached, 2 if addr was cached
     });
