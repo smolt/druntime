@@ -170,6 +170,7 @@ else version ( ARM_Any )
 	ulong sp;                         // x31 (stack ptr)
 	ulong pc;                         // program counter
 	uint cpsr;                        // current program status register
+        uint __pad;                       // same size for 32-bit or 64-bit clients
     }
 
     struct arm_state_hdr_t
