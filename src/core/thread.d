@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The thread module provides support for thread creation and management.
  *
  * Copyright: Copyright Sean Kelly 2005 - 2012.
@@ -1534,7 +1534,7 @@ private:
       }
       else version (AArch64)
       {
-          uint[33]      m_reg; // x0-x31, pc
+          ulong[33]      m_reg; // x0-x31, pc
       }
       else version (ARM)
       {
@@ -2304,8 +2304,6 @@ else
             import ldc.llvmasm;
 
             // Callee-save registers, according to AAPCS64, section 5.1.1.
-            // FIXME: As loads/stores are explicit on ARM, the code generated for
-            // this is horrible. Better write the entire function in ASM.
             size_t[11] regs = void;
             __asm("str x19, $0", "=*m", regs.ptr + 0);
             __asm("str x20, $0", "=*m", regs.ptr + 1);
@@ -2317,9 +2315,9 @@ else
             __asm("str x26, $0", "=*m", regs.ptr + 7);
             __asm("str x27, $0", "=*m", regs.ptr + 8);
             __asm("str x28, $0", "=*m", regs.ptr + 9);
+            // TODO: is fp needed?
             __asm("str x29, $0", "=*m", regs.ptr + 10);
-
-            __asm("str x31, $0", "=*m", &sp);
+            sp = __asm!(void*)("mov $0, sp", "=r");
         }
         else version (ARM)
         {
@@ -2520,23 +2518,20 @@ private void suspend( Thread t ) nothrow
         }
         else version (AArch64)
         {
-            // Totally a TODO:
             arm_thread_state64_t    state = void;
             mach_msg_type_number_t  count = ARM_THREAD_STATE64_COUNT;
 
-            // TODO: this was comment for ARM.  Have to verify
-            // Thought this would be ARM_THREAD_STATE64, but that fails.
-            // Mystery
-            if( thread_get_state( t.m_tmach, ARM_THREAD_STATE, &state, &count ) != KERN_SUCCESS )
+            if( thread_get_state( t.m_tmach, ARM_THREAD_STATE64, &state, &count ) != KERN_SUCCESS )
                 onThreadError( "Unable to load thread state" );
-            // TODO: in past, ThreadException here recurses forever!  Does it
+            // TODO: ThreadException here recurses forever!  Does it
             //still using onThreadError?
             //printf("state count %d (expect %d)\n", count ,ARM_THREAD_STATE64_COUNT);
             if( !t.m_lock )
                 t.m_curr.tstack = cast(void*) state.sp;
-            t.m_reg[0..30] = state.r;  // x0-x29
-            t.m_reg[30] = state.sp;    // x30
-            t.m_reg[31] = state.lr;    // x31
+            t.m_reg[0..29] = state.x;  // x0-x28
+            t.m_reg[29] = state.fp;    // x29
+            t.m_reg[30] = state.lr;    // x30
+            t.m_reg[31] = state.sp;    // x31
             t.m_reg[32] = state.pc;
         }
         else version (ARM)
@@ -3511,11 +3506,11 @@ private
     }
     else version( AArch64 )
     {
-        // TODO: This is totally wrong - but gets us to compile
         version( Posix )
         {
-            version = AsmARM_Posix;
+            version = AsmAArch_Posix;
             version = AsmExternal;
+            version = AlignFiberStackTo16Byte;
         }
     }
     else version( ARM )
@@ -3818,6 +3813,7 @@ version( LDC )
     version( OSX )
     {
         version( ARM ) version = CheckFiberMigration;
+        version( AArch64 ) version = CheckFiberMigration;
         version( X86 ) version = CheckFiberMigration;
         version( X86_64 ) version = CheckFiberMigration;
     }
@@ -5028,6 +5024,19 @@ private:
             (cast(ubyte*)pstack - SZ)[0 .. SZ] = 0;
             pstack -= ABOVE;
             *cast(size_t*)(pstack - SZ_RA) = cast(size_t)&fiber_entryPoint;
+        }
+        else version( AsmAArch_Posix )
+        {
+            // Create stack to match preliminary version in threadasm.S.
+            // Still some work TODO (floats, hidding lr from GC).
+            
+            // link register
+            push( cast(size_t) &fiber_entryPoint );
+            // frame pointer can be zero, x19-x28 also zero initialized
+            version( StackGrowsDown )
+                pstack -= size_t.sizeof * 11;
+            else
+                static assert(false, "Only full descending stacks supported on AArch");
         }
         else version( AsmARM_Posix )
         {

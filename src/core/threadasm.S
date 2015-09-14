@@ -605,4 +605,36 @@ fiber_switchContext:
 #ifndef __APPLE__
     .fnend
 #endif
+	
+#elif defined(__arm64__) && defined(__APPLE__)
+// Preliminary version that passes unittests on iOS arm64
+// but is still more work to go.
+
+// TODO: should do like what was done for GDC with underscore macro	
+        .global _fiber_switchContext
+        .align  2
+_fiber_switchContext:
+        stp     x28, x27, [sp, #-96]!
+        stp     x26, x25, [sp, #16]
+        stp     x24, x23, [sp, #32]
+        stp     x22, x21, [sp, #48]
+        stp     x20, x19, [sp, #64]
+        stp     x29, x30, [sp, #80] // fp, lr
+        //add   x29, sp, #80        // no need?
+
+        // TODO: this ordering is wrong if want to avoid scanning lr
+        mov     x19, sp
+        str     x19, [x0]       // put sp into oldp
+
+        // TODO: float regs next
+
+        mov     sp, x1
+        //sub   sp, x29, #80        // no need?
+        ldp     x29, x30, [sp, #80]
+        ldp     x20, x19, [sp, #64]
+        ldp     x22, x21, [sp, #48]
+        ldp     x24, x23, [sp, #32]
+        ldp     x26, x25, [sp, #16]
+        ldp     x28, x27, [sp], #96
+        ret     
 #endif
