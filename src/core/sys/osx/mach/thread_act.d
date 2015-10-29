@@ -155,21 +155,22 @@ else version ( ARM_Any )
 
     struct arm_thread_state32_t
     {
-	uint[13] r;                      // r0-r12
-	uint sp;                         // r13 (stack ptr)
-	uint lr;                         // r14 (link register)
-	uint pc;                         // r15 (program counter)
-	uint cpsr;                       // current program status register
+        uint[13] r;                      // r0-r12
+        uint sp;                         // r13 (stack ptr)
+        uint lr;                         // r14 (link register)
+        uint pc;                         // r15 (program counter)
+        uint cpsr;                       // current program status register
     }
 
     struct arm_thread_state64_t
     {
-	ulong[29] x;                      // x0-x28
-	ulong fp;                         // x29 (frame ptr)
-	ulong lr;                         // x30 (link register)
-	ulong sp;                         // x31 (stack ptr)
-	ulong pc;                         // program counter
-	uint cpsr;                        // current program status register
+        ulong[29] x;                      // x0-x28
+        ulong fp;                         // x29 (frame ptr)
+        ulong lr;                         // x30 (link register)
+        ulong sp;                         // x31 (stack ptr)
+        ulong pc;                         // program counter
+        uint cpsr;                        // current program status register
+        uint __pad;                       // same size for 32-bit or 64-bit clients
     }
 
     struct arm_state_hdr_t

@@ -25,13 +25,13 @@ version( ARM )
 version( AArch64 )
     version = ARM_Any;
 
+// TODO: all the same, could reduce to no versions
 version( i386 )
 {
     alias uint        natural_t;
     alias natural_t   mach_port_t;
 }
-// dano - TODO: not sure this is correct
-version( ARM_Any )
+else version( ARM_Any )
 {
     alias uint        natural_t;
     alias natural_t   mach_port_t;
