@@ -24,6 +24,15 @@
 .section .note.GNU-stack,"",%progbits
 #endif
 
+/* Let preprocessor tell us if C symbols have a prefix: __USER_LAEBL_PREFIX__ */
+#ifdef __USER_LABEL_PREFIX__
+#define GLUE2(a, b) a ## b
+#define GLUE(a, b) GLUE2(a, b)
+#define CSYM(name) GLUE(__USER_LABEL_PREFIX__, name)
+#else
+#define CSYM(name) name
+#endif
+
 /************************************************************************************
  * POWER PC ASM BITS
  ************************************************************************************/
@@ -515,7 +524,7 @@ fiber_switchContext:
 
     jr $ra // return
 
-#elif defined(__arm__) && defined(__ARM_EABI__)
+#elif defined(__arm__) && (defined(__ARM_EABI__) || defined(__APPLE__))
 /************************************************************************************
  * ARM ASM BITS
  ************************************************************************************/
@@ -551,10 +560,15 @@ fiber_switchContext:
 
 .text
 .align  2
+#ifdef __APPLE__
+.global _fiber_switchContext
+_fiber_switchContext:
+#else
 .global fiber_switchContext
 .type   fiber_switchContext, %function
 fiber_switchContext:
     .fnstart
+#endif
     push {r4-r11}
     // update the oldp pointer. Link register and floating point registers stored later to prevent the GC from
     // scanning them.
@@ -562,7 +576,14 @@ fiber_switchContext:
     // push r0 (or any other register) as well to keep stack 8byte aligned
     push {r0, lr}
 
-    #if defined(__ARM_PCS_VFP) || (defined(__ARM_PCS) && !defined(__SOFTFP__)) // ARM_HardFloat  || ARM_SoftFP
+    // ARM_HardFloat  || ARM_SoftFP
+    // this was conditional used by gdc version:
+    // #if defined(__ARM_PCS_VFP) || (defined(__ARM_PCS) && !defined(__SOFTFP__))
+    //
+    // clang defines __VFP_FP__ and !__SOFTFP for float-abi=hard or
+    // softfp.  Hopefully this new conditional will work out for iOS and other architectures
+    // make sure this is correct.
+    #if defined(__ARM_PCS_VFP) || ((defined(__ARM_PCS) || defined(__VFP_FP__)) && !defined(__SOFTFP__))
       vpush {d8-d15}
       // now switch over to the new stack. Need to subtract (8*8[d8-d15]+2*4[r0, lr]) to position stack pointer
       // below the last saved register. Remember we saved the SP before pushing [r0, lr, d8-d15]
@@ -590,5 +611,62 @@ fiber_switchContext:
     mov lr, #0
     // return by writing lr into pc
     mov pc, r1
+#ifndef __APPLE__
     .fnend
+#endif
+
+#elif defined(__aarch64__)
+/************************************************************************************
+ * AArch64 (arm64) ASM BITS
+ ************************************************************************************/
+/**
+ * preserve/restore AAPCS64 registers
+ *   x19-x28 5.1.1 64-bit callee saved
+ *   x29 fp, or possibly callee saved reg - depends on platform choice 5.2.3)
+ *   x30 lr
+ *   d8-d15  5.1.2 says callee only must save bottom 64-bits (the "d" regs)
+ *
+ * saved regs on stack will look like:
+ *   19: x19
+ *   18: x20
+ *   ...
+ *   10: x28
+ *    9: x29 (fp)  <-- oldp / *newp save stack top
+ *    8: x30 (lr)
+ *    7: d8
+ *   ...
+ *    0: d15       <-- sp
+ */
+        .text
+        .global CSYM(fiber_switchContext)
+        .p2align  2
+CSYM(fiber_switchContext):
+        stp     d15, d14, [sp, #-20*8]!
+        stp     d13, d12, [sp, #2*8]
+        stp     d11, d10, [sp, #4*8]
+        stp     d9, d8,   [sp, #6*8]
+        stp     x30, x29, [sp, #8*8] // lr, fp
+        stp     x28, x27, [sp, #10*8]
+        stp     x26, x25, [sp, #12*8]
+        stp     x24, x23, [sp, #14*8]
+        stp     x22, x21, [sp, #16*8]
+        stp     x20, x19, [sp, #18*8]
+
+        // oldp is set above saved lr (x30) to hide it and float regs
+        // from GC
+        add     x19, sp, #9*8
+        str     x19, [x0]       // *oldp tstack
+        sub     sp, x1, #9*8    // switch to newp sp
+
+        ldp     x20, x19, [sp, #18*8]
+        ldp     x22, x21, [sp, #16*8]
+        ldp     x24, x23, [sp, #14*8]
+        ldp     x26, x25, [sp, #12*8]
+        ldp     x28, x27, [sp, #10*8]
+        ldp     x30, x29, [sp, #8*8] // lr, fp
+        ldp     d9, d8,   [sp, #6*8]
+        ldp     d11, d10, [sp, #4*8]
+        ldp     d13, d12, [sp, #2*8]
+        ldp     d15, d14, [sp], #20*8
+        ret
 #endif

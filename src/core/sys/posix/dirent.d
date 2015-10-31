@@ -96,14 +96,32 @@ else version( OSX )
         DT_WHT      = 14
     }
 
-    align(4)
-    struct dirent
+    // iOS always uses 64-bit inodes.  I am only focusing on iOS, so not
+    // touching MacOS which can use 64-bit too by using 64-bit functions that
+    // have $INODE64 suffix.
+    version (IPhoneOS)
     {
-        ino_t       d_ino;
-        ushort      d_reclen;
-        ubyte       d_type;
-        ubyte       d_namlen;
-        char[256]   d_name;
+        struct dirent
+        {
+            ulong       d_ino;
+            ulong       d_seekoff;
+            ushort      d_reclen;
+            ushort      d_namlen;
+            ubyte       d_type;
+            char[1024]  d_name;
+        }
+    }
+    else
+    {
+        align(4)
+        struct dirent
+        {
+            ino_t       d_ino;
+            ushort      d_reclen;
+            ubyte       d_type;
+            ubyte       d_namlen;
+            char[256]   d_name;
+        }
     }
 
     struct DIR

@@ -17,6 +17,16 @@ module core.atomic;
 
 version (LDC)
 {
+   version (IPhoneOS)
+    {
+         version (ARM)
+             enum has64BitCAS = false;
+         else version (X86)
+             enum has64BitCAS = false;
+         else
+             enum has64BitCAS = true;
+    }
+    else
     enum has64BitCAS = true;
 
     // Enable 128bit CAS for all 64bit platforms.
@@ -357,7 +367,9 @@ else version( LDC )
         llvm_atomic_store!Int(*newPtr, target, _ordering!(ms));
     }
 
-    void atomicFence() nothrow
+    // Note: changed atomicFence to a template so compiler will inline intrinsic.
+    // Official druntime verison is non-template
+    void atomicFence()() nothrow
     {
         llvm_memory_fence();
     }
@@ -1616,6 +1628,7 @@ version( unittest )
         {
             while (!*f)
             {
+                atomicFence();
             }
 
             atomicFence();

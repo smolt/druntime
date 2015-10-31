@@ -12,6 +12,23 @@ version (Win64) {} else
 
 import ldc.eh.common;
 
+// Select setjump/longjump style exceptions.
+//
+// references: in GCC, for example gcc-4.8, see
+// libgcc/unwind-sjlj.c
+// https://github.com/mirrors/gcc/blob/master/libgcc/unwind-sjlj.c
+//
+// the Apple version can be found at
+// https://www.opensource.apple.com/source/libunwind/libunwind-35.1/src/Unwind-sjlj.c
+
+version (ARM)
+{
+    version (IPhoneOS)
+        version = SjLj_Exceptions;
+    else
+        version = ARM_EABI_UNWINDER;
+}
+
 private:
 
 // C headers
@@ -54,7 +71,7 @@ extern(C)
 
     ptrdiff_t _Unwind_GetLanguageSpecificData(_Unwind_Context_Ptr context);
     ptrdiff_t _Unwind_GetCFA(_Unwind_Context_Ptr context);
-    version (ARM)
+    version (ARM_EABI_UNWINDER)
     {
         _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Control_Block*);
         void _Unwind_Resume(_Unwind_Control_Block*);
@@ -76,8 +93,20 @@ extern(C)
     }
     else
     {
+        version(SjLj_Exceptions)
+        {
+            void _Unwind_SjLj_Resume(_Unwind_Exception*);
+            _Unwind_Reason_Code _Unwind_SjLj_RaiseException(_Unwind_Exception*);
+
+            alias _Unwind_Resume = _Unwind_SjLj_Resume;
+            alias _Unwind_RaiseException = _Unwind_SjLj_RaiseException;
+        }
+        else
+        {
         _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception*);
         void _Unwind_Resume(_Unwind_Exception*);
+        }
+        
         ptrdiff_t _Unwind_GetIP(_Unwind_Context_Ptr context);
         void _Unwind_SetIP(_Unwind_Context_Ptr context, ptrdiff_t new_value);
         void _Unwind_SetGR(_Unwind_Context_Ptr context, int index,
@@ -100,7 +129,7 @@ extern(C)
 struct _d_exception
 {
     Object exception_object;
-    version (ARM)
+    version (ARM_EABI_UNWINDER)
     {
         _Unwind_Control_Block unwind_info;
     }
@@ -254,7 +283,7 @@ struct NativeContext
     }
 }
 
-version(ARM)
+version(ARM_EABI_UNWINDER)
 {
     enum _Unwind_State
     {
@@ -367,7 +396,7 @@ version(ARM)
         return rc;
     }
 }
-else // !ARM
+else // !ARM_EABI_UNWINDER
 {
     // The personality routine gets called by the unwind handler and is responsible for
     // reading the EH tables and deciding what to do.
@@ -415,7 +444,7 @@ void _d_throw_exception(Object e)
         throwable.info = _d_traceContext();
 
     auto exc_struct = new _d_exception;
-    version (ARM)
+    version (ARM_EABI_UNWINDER)
     {
         exc_struct.unwind_info.exception_class = _d_exception_class;
     }
@@ -437,6 +466,15 @@ void _d_throw_exception(Object e)
     // _Unwind_RaiseException should never return unless something went really
     // wrong with unwinding.
     immutable ret = _Unwind_RaiseException(&exc_struct.unwind_info);
+    // TODO: iOS had other diagnostic messages here too.  Do we need them
+/+
+        if (ret == _Unwind_Reason_Code.END_OF_STACK) {
+            fprintf(stderr, "Uncaught exception - terminating\n");
+        }
+        else if (ret == _Unwind_Reason_Code.FATAL_PHASE1_ERROR) {
+            fprintf(stderr, "Possible corrupt stack during phase1 - terminating\n");
+        }
++/    
     fatalerror("_Unwind_RaiseException failed with reason code: %d", ret);
 }
 
