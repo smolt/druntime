@@ -357,13 +357,7 @@ version( LDC )
         }
         else version( AArch64 )
         {
-            // TODO: why does llvm promote float to double while other archs
-            // don't?  Is there another calling convention to use?
-            // Perhaps only needed for iOS, not sure yet
-            static if (is(T == float))
-                T arg = *cast(double*)ap;
-            else
-                T arg = *cast(T*)ap;
+            T arg = *cast(T*)ap;
             ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
             return arg;
         }
@@ -419,11 +413,7 @@ version( LDC )
         }
         else version( AArch64 )
         {
-            // Perhaps only needed for iOS, not sure yet            
-            static if (is(T == float))
-                parmn = *cast(double*)ap;
-            else
-                parmn = *cast(T*)ap;
+            parmn = *cast(T*)ap;
             ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
         }
         else version( ARM )
