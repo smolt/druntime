@@ -99,7 +99,7 @@ else version( OSX )
     // iOS always uses 64-bit inodes.  I am only focusing on iOS, so not
     // touching MacOS which can use 64-bit too by using 64-bit functions that
     // have $INODE64 suffix.
-    version (IPhoneOS)
+    version (iOS)
     {
         struct dirent
         {

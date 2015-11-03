@@ -579,7 +579,7 @@ else version( MinGW )
     }
   }
 }
-else version( IPhoneOS )
+else version( iOS )
 {
     enum
     {

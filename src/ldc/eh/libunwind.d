@@ -23,7 +23,7 @@ import ldc.eh.common;
 
 version (ARM)
 {
-    version (IPhoneOS)
+    version (iOS)
         version = SjLj_Exceptions;
     else
         version = ARM_EABI_UNWINDER;

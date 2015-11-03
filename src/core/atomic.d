@@ -17,12 +17,12 @@ module core.atomic;
 
 version (LDC)
 {
-   version (IPhoneOS)
+   version (iOS)
    {
        // Don't enabled 128BitCAS because of a codegen problem (optimizer
        // generates a bad opcode that shows up in unittest).  Not sure if this
        // is arm64 along with iOS or LLVM 3.6.1 only.
-       version(AArch64) version = IPhoneOS_AArch64_Workaround;
+       version(AArch64) version = iOS_AArch64_Workaround;
 
        // TODO: revisit these to figure out why different
        version (ARM)
@@ -47,7 +47,7 @@ version (LDC)
         enum has128BitCAS = false;
     else version(LDC_LLVM_301)
         enum has128BitCAS = false;
-    else version(IPhoneOS_AArch64_Workaround)
+    else version(iOS_AArch64_Workaround)
         enum has128BitCAS = false;
     else version(D_LP64)
         enum has128BitCAS = true;

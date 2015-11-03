@@ -4008,7 +4008,7 @@ version( LDC )
 // manipulate the stack as we need.
 
 version( GNU_SjLj_Exceptions )          version = Sjlj_Exceptions;
-else version( IPhoneOS ) version( ARM ) version = SjLj_Exceptions;
+else version( iOS ) version( ARM ) version = SjLj_Exceptions;
 
 version( SjLj_Exceptions )
 private
