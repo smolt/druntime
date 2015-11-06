@@ -12,6 +12,14 @@ import core.stdc.stdio;
 import core.stdc.stdlib;
 import core.stdc.stdarg;
 
+version (ARM)
+{
+    version (iOS)
+        version = SjLj_Exceptions;
+    else
+        version = ARM_EABI_UNWINDER;
+}
+
 // D runtime function
 extern(C) int _d_isbaseof(ClassInfo oc, ClassInfo c);
 
@@ -264,6 +272,21 @@ void _d_getLanguageSpecificTables(ubyte* data, ref ubyte* callsite, ref ubyte* a
         fatalerror("DWARF header has unexpected format 1");
 
     ciEncoding = *data++;
+
+    version (SjLj_Exceptions) {
+        if (ciEncoding == _DW_EH_Format.DW_EH_PE_omit) {
+            // TODO: maybe this is ok with other personalities besides sjlj
+            // used for simple cleanup actions (finally, dtors) that don't care
+            // about exception type
+            classinfo_table = null;
+        }
+        else {
+            size_t cioffset;
+            data = get_uleb128(data, cioffset);
+            classinfo_table = data + cioffset;
+        }
+    }
+    else {
     if (ciEncoding == _DW_EH_Format.DW_EH_PE_omit)
         fatalerror("Language Specific Data does not contain Types Table");
     version (ARM) version (linux) {
@@ -275,6 +298,7 @@ void _d_getLanguageSpecificTables(ubyte* data, ref ubyte* callsite, ref ubyte* a
     size_t cioffset;
     data = get_uleb128(data, cioffset);
     classinfo_table = data + cioffset;
+    }
 
     if (*data++ != _DW_EH_Format.DW_EH_PE_udata4)
         fatalerror("DWARF header has unexpected format 2");
@@ -426,7 +450,7 @@ extern(C) auto eh_personality_common(NativeContext)(ref NativeContext nativeCont
     // The instruction pointer (ip) will point to the next instruction after
     // whatever made execution leave this frame, so substract 1 for the range
     // comparison below.
-    immutable ptrdiff_t ip = nativeContext.getIP() - 1;
+    ptrdiff_t ip = nativeContext.getIP() - 1;
 
     // The table entries are all relative to the start address of the region.
     immutable ptrdiff_t region_start = nativeContext.getRegionStart();
@@ -438,6 +462,34 @@ extern(C) auto eh_personality_common(NativeContext)(ref NativeContext nativeCont
     // landing pad (will be zero if there are none).
     size_t actionTableStartOffset;
 
+version (SjLj_Exceptions)
+{
+    if (ip < 0) {
+        return nativeContext.continueUnwind();
+    }
+    else if (ip == 0) {
+        // If ip is not present in the table, call terminate.  This is for
+        // a destructor inside a cleanup, or a library routine the compiler
+        // was not expecting to throw.
+        fatalerror("terminate\n");
+    }
+    else if (ip > 0) {
+        size_t cs_lp, cs_action;
+        ubyte* callsite_walker = callsite_table;
+        do {
+            callsite_walker = get_uleb128(callsite_walker, cs_lp);
+            callsite_walker = get_uleb128(callsite_walker, cs_action);
+            debug(EH_personality_verbose)
+                printf("%x %x\n", cs_lp, cs_action);
+        }
+        while (--ip);
+
+        landingPadAddr = cs_lp + 1;
+        actionTableStartOffset = cs_action;
+    }
+}
+else // !SjLj_Exceptions
+{
     ubyte* callsite_walker = callsite_table;
     while (true)
     {
@@ -465,6 +517,7 @@ extern(C) auto eh_personality_common(NativeContext)(ref NativeContext nativeCont
         if (ip < region_start + block_start_offset + block_size)
             break;
     }
+} // !SjLj_Exceptions
 
     debug(EH_personality)
     {

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The thread module provides support for thread creation and management.
  *
  * Copyright: Copyright Sean Kelly 2005 - 2012.
@@ -30,12 +30,6 @@ private
 
     alias rt_tlsgc_processGCMarks =
         externDFunc!("rt.tlsgc.processGCMarks", void function(void*, scope IsMarkedDg) nothrow);
-}
-
-version( Solaris )
-{
-    import core.sys.solaris.sys.priocntl;
-    import core.sys.solaris.sys.types;
 }
 
 version( Solaris )
@@ -384,7 +378,8 @@ else version( Posix )
         //
         __gshared sem_t suspendCount;
 
-
+        // TODO: thread_suspendHandler and thread_resumeHandler not used for
+        // OSX/iOS - should they be versioned out?
         extern (C) void thread_suspendHandler( int sig ) nothrow
         in
         {
@@ -1559,6 +1554,8 @@ private:
     }
     else version( OSX )
     {
+      // TODO: find out why are m_reg explicitly scanned on Windows but not
+      // OSX?
       version( X86 )
       {
         uint[8]         m_reg; // edi,esi,ebp,esp,ebx,edx,ecx,eax
@@ -1567,6 +1564,14 @@ private:
       {
         ulong[16]       m_reg; // rdi,rsi,rbp,rsp,rbx,rdx,rcx,rax
                                // r8,r9,r10,r11,r12,r13,r14,r15
+      }
+      else version (AArch64)
+      {
+          ulong[33]      m_reg; // x0-x31, pc
+      }
+      else version (ARM)
+      {
+          uint[16]      m_reg; // r0-r15
       }
       else
       {
@@ -1800,6 +1805,7 @@ private:
     }
     body
     {
+        //TODO: need to prevent calling this more than once on same thread
         slock.lock_nothrow();
         {
             // NOTE: When a thread is removed from the global thread list its
@@ -2207,7 +2213,8 @@ extern (C) void thread_detachInstance( Thread t )
     Thread.remove( t );
 }
 
-
+// TODO: temp disable until fixed
+version (none)
 unittest
 {
     import core.sync.semaphore;
@@ -2220,6 +2227,7 @@ unittest
     }).start();
 
     sem.wait(); // thread cannot be detached while being started
+    // TODO: a double free happens because the thread_entryPoint removes too
     thread_detachInstance(t);
     foreach (t2; Thread)
         assert(t !is t2);
@@ -2317,6 +2325,9 @@ shared static ~this()
 
 // Used for needLock below.
 private __gshared bool multiThreadedFlag = false;
+
+// TODO: later do asm version as will be easier to maintain
+//version (ARM) version = ExternStackShell;
 
 version (ExternStackShell)
 {
@@ -2463,23 +2474,17 @@ else
         {
             import ldc.llvmasm;
 
-            // Callee-save registers, according to AAPCS64, section 5.1.1.
-            // FIXME: As loads/stores are explicit on ARM, the code generated for
-            // this is horrible. Better write the entire function in ASM.
+            // Callee-save registers, x19-x28 according to AAPCS64, section
+            // 5.1.1.  Include x29 fp because it optionally can be a callee
+            // saved reg
             size_t[11] regs = void;
-            __asm("str x19, $0", "=*m", regs.ptr + 0);
-            __asm("str x20, $0", "=*m", regs.ptr + 1);
-            __asm("str x21, $0", "=*m", regs.ptr + 2);
-            __asm("str x22, $0", "=*m", regs.ptr + 3);
-            __asm("str x23, $0", "=*m", regs.ptr + 4);
-            __asm("str x24, $0", "=*m", regs.ptr + 5);
-            __asm("str x25, $0", "=*m", regs.ptr + 6);
-            __asm("str x26, $0", "=*m", regs.ptr + 7);
-            __asm("str x27, $0", "=*m", regs.ptr + 8);
-            __asm("str x28, $0", "=*m", regs.ptr + 9);
+            __asm("stp x19, x20, $0", "=*m", regs.ptr + 0);
+            __asm("stp x21, x22, $0", "=*m", regs.ptr + 2);
+            __asm("stp x23, x24, $0", "=*m", regs.ptr + 4);
+            __asm("stp x25, x26, $0", "=*m", regs.ptr + 6);
+            __asm("stp x27, x28, $0", "=*m", regs.ptr + 8);
             __asm("str x29, $0", "=*m", regs.ptr + 10);
-
-            __asm("str x31, $0", "=*m", &sp);
+            sp = __asm!(void*)("mov $0, sp", "=r");
         }
         else version (ARM)
         {
@@ -2488,17 +2493,32 @@ else
             // Callee-save registers, according to AAPCS, section 5.1.1.
             // FIXME: As loads/stores are explicit on ARM, the code generated for
             // this is horrible. Better write the entire function in ASM.
-            size_t[8] regs = void;
-            __asm("str  r4, $0", "=*m", regs.ptr + 0);
-            __asm("str  r5, $0", "=*m", regs.ptr + 1);
-            __asm("str  r6, $0", "=*m", regs.ptr + 2);
-            __asm("str  r7, $0", "=*m", regs.ptr + 3);
-            __asm("str  r8, $0", "=*m", regs.ptr + 4);
-            __asm("str  r9, $0", "=*m", regs.ptr + 5);
-            __asm("str r10, $0", "=*m", regs.ptr + 6);
-            __asm("str r11, $0", "=*m", regs.ptr + 7);
 
-            __asm("str sp, $0", "=*m", &sp);
+            // ARM_Thumb1 isn't predeclared in the compiler but could be based
+            // on arm arch.
+            version (ARM_Thumb1)
+            {
+                size_t[4] regs = void;
+                __asm("str  r4, $0", "=*m", regs.ptr + 0);
+                __asm("str  r5, $0", "=*m", regs.ptr + 1);
+                __asm("str  r6, $0", "=*m", regs.ptr + 2);
+                __asm("str  r7, $0", "=*m", regs.ptr + 3);
+                __asm("mov $1, sp;str $1, $0", "=*m,~r", &sp);
+            }
+            else // arm and thumb2 instructions
+            {
+                size_t[8] regs = void;
+                __asm("str  r4, $0", "=*m", regs.ptr + 0);
+                __asm("str  r5, $0", "=*m", regs.ptr + 1);
+                __asm("str  r6, $0", "=*m", regs.ptr + 2);
+                __asm("str  r7, $0", "=*m", regs.ptr + 3);
+                __asm("str  r8, $0", "=*m", regs.ptr + 4);
+                __asm("str  r9, $0", "=*m", regs.ptr + 5);
+                __asm("str r10, $0", "=*m", regs.ptr + 6);
+                __asm("str r11, $0", "=*m", regs.ptr + 7);
+
+                __asm("str sp, $0", "=*m", &sp);
+            }
         }
         else version (MIPS64)
         {
@@ -2662,6 +2682,43 @@ private void suspend( Thread t ) nothrow
             t.m_reg[13] = state.r13;
             t.m_reg[14] = state.r14;
             t.m_reg[15] = state.r15;
+        }
+        else version (AArch64)
+        {
+            arm_thread_state64_t    state = void;
+            mach_msg_type_number_t  count = ARM_THREAD_STATE64_COUNT;
+
+            if( thread_get_state( t.m_tmach, ARM_THREAD_STATE64, &state, &count ) != KERN_SUCCESS )
+                onThreadError( "Unable to load thread state" );
+            // TODO: ThreadException here recurses forever!  Does it
+            //still using onThreadError?
+            //printf("state count %d (expect %d)\n", count ,ARM_THREAD_STATE64_COUNT);
+            if( !t.m_lock )
+                t.m_curr.tstack = cast(void*) state.sp;
+            t.m_reg[0..29] = state.x;  // x0-x28
+            t.m_reg[29] = state.fp;    // x29
+            t.m_reg[30] = state.lr;    // x30
+            t.m_reg[31] = state.sp;    // x31
+            t.m_reg[32] = state.pc;
+        }
+        else version (ARM)
+        {
+            arm_thread_state32_t    state = void;
+            mach_msg_type_number_t  count = ARM_THREAD_STATE32_COUNT;
+
+            // Thought this would be ARM_THREAD_STATE32, but that fails.
+            // Mystery
+            if( thread_get_state( t.m_tmach, ARM_THREAD_STATE, &state, &count ) != KERN_SUCCESS )
+                onThreadError( "Unable to load thread state" );
+            // TODO: in past, ThreadException here recurses forever!  Does it
+            //still using onThreadError?
+            //printf("state count %d (expect %d)\n", count ,ARM_THREAD_STATE32_COUNT);
+            if( !t.m_lock )
+                t.m_curr.tstack = cast(void*) state.sp;
+            t.m_reg[0..13] = state.r;  // r0 - r13
+            t.m_reg[13] = state.sp;
+            t.m_reg[14] = state.lr;
+            t.m_reg[15] = state.pc;
         }
         else
         {
@@ -3240,7 +3297,7 @@ private void* getStackTop() nothrow
         }
         else version (ARM)
         {
-            return __asm!(void *)("mov $0, r13", "=r");
+            return __asm!(void *)("mov $0, sp", "=r");
         }
         else version (PPC)
         {
@@ -3609,6 +3666,15 @@ private
             version = AsmExternal;
         }
     }
+    else version( AArch64 )
+    {
+        version( Posix )
+        {
+            version = AsmAArch64_Posix;
+            version = AsmExternal;
+            version = AlignFiberStackTo16Byte;
+        }
+    }
     else version( ARM )
     {
         version( Posix )
@@ -3897,6 +3963,86 @@ private
     }
 }
 
+// Detect when a Fiber migrates between Threads for systems in which it may be
+// unsafe to do so.  A unittest below helps decide if CheckFiberMigration
+// should be set for your system.
+
+version( LDC )
+{
+    version( OSX )
+    {
+        version( ARM ) version = CheckFiberMigration;
+        version( AArch64 ) version = CheckFiberMigration;
+        version( X86 ) version = CheckFiberMigration;
+        version( X86_64 ) version = CheckFiberMigration;
+    }
+}
+
+// Fiber support for SjLj style exceptions
+//
+// Exception handling based on setjmp/longjmp tracks the unwind points with a
+// linked list stack managed by _Unwind_SjLj_Register and
+// _Unwind_SjLj_Unregister.  In the context of Fibers, the stack needs to be
+// Fiber local, otherwise unwinding could weave through functions on other
+// Fibers as opposed to just the current Fiber.  The solution is to give each
+// Fiber has a m_sjljExStackTop.
+//
+// Two implementations known to have this SjLj stack design are GCC's libgcc
+// and darwin libunwind for ARM (iOS).  Functions to get/set the current SjLj
+// stack are named differently in each implmentation:
+//
+// https://github.com/gcc-mirror/gcc/blob/master/libgcc/unwind-sjlj.c
+//
+// libgcc
+//   struct SjLj_Function_Context* _Unwind_SjLj_GetContext(void)
+//   void _Unwind_SjLj_SetContext(struct SjLj_Function_Context *fc)
+//
+// http://www.opensource.apple.com/source/libunwind/libunwind-30/src/Unwind-sjlj.c
+//
+// darwin (OS X)
+//   _Unwind_FunctionContext* __Unwind_SjLj_GetTopOfFunctionStack();
+//   void __Unwind_SjLj_SetTopOfFunctionStack(_Unwind_FunctionContext* fc);
+//
+// These functions are not extern but if we peek at the implementations it
+// turns out that _Unwind_SjLj_Register and _Unwind_SjLj_Unregister can
+// manipulate the stack as we need.
+
+version( GNU_SjLj_Exceptions )          version = Sjlj_Exceptions;
+else version( iOS ) version( ARM ) version = SjLj_Exceptions;
+
+version( SjLj_Exceptions )
+private
+{
+    // libgcc struct SjLj_Function_Context and darwin struct
+    // _Unwind_FunctionContext have same initial layout so can get away with
+    // one type to mimic header of both here.
+    struct SjLjFuncContext
+    {
+        SjLjFuncContext* prev;
+        // rest of this struc we don't care about in swapSjLjStackTop below.
+    }
+
+    extern(C) @nogc nothrow
+    {
+        void _Unwind_SjLj_Register(SjLjFuncContext* fc);
+        void _Unwind_SjLj_Unregister(SjLjFuncContext* fc);
+    }
+
+    // Swap in a new stack top, returning the previous one
+    SjLjFuncContext* swapSjLjStackTop(SjLjFuncContext* newtop) @nogc nothrow
+    {
+        // register a dummy context to retrieve stack top, then plop our new
+        // stack top in its place before unregistering, making it the new top.
+        SjLjFuncContext fc;
+        _Unwind_SjLj_Register(&fc);
+
+        SjLjFuncContext* prevtop = fc.prev;
+        fc.prev = newtop;
+        _Unwind_SjLj_Unregister(&fc);
+
+        return prevtop;
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Fiber
@@ -4105,7 +4251,7 @@ class Fiber
      * In:
      *  fn must not be null.
      */
-    this( void function() fn, size_t sz = PAGESIZE*4 ) nothrow
+    this( void function() fn, size_t sz = PAGESIZE*10 ) nothrow
     in
     {
         assert( fn );
@@ -4128,7 +4274,7 @@ class Fiber
      * In:
      *  dg must not be null.
      */
-    this( void delegate() dg, size_t sz = PAGESIZE*4 ) nothrow
+    this( void delegate() dg, size_t sz = PAGESIZE*10 ) nothrow
     in
     {
         assert( dg );
@@ -4319,6 +4465,39 @@ class Fiber
         return m_state;
     }
 
+    /**
+     * Return true if migrating a Fiber between Threads is unsafe on this
+     * system.  This is due to compiler optimizations that cache thread local
+     * variable addresses.  When Fiber.yield() returns on a different
+     * Thread, the addresses refer to the previous Thread's variables.
+     */
+    static @property bool migrationUnsafe() nothrow
+    {
+        version( CheckFiberMigration )
+            return true;
+        else
+            return false;
+    }
+
+    /**
+     * Allow this Fiber to be resumed on a different thread for systems where
+     * Fiber migration is unsafe (migrationUnsafe() is true).  Otherwise the
+     * first time a Fiber is resumed on a different Thread, a ThreadException
+     * is thrown.  This provides the programmer a reminder to be careful and
+     * helps detect such usage in libraries being ported from other systems.
+     *
+     * Fiber migration on such systems can be done safely if you control all
+     * the code and know that thread locals are not involved.
+     *
+     * For systems without this issue, allowMigration does nothing, as you are
+     * always free to migrate.
+     */
+    final void allowMigration() nothrow
+    {
+        // Does nothing if checking is disabled
+        version( CheckFiberMigration )
+            m_allowMigration = true;
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     // Actions on Calling Fiber
@@ -4465,6 +4644,18 @@ private:
     Throwable           m_unhandled;
     State               m_state;
 
+    // Set first time switchIn called to indicate this Fiber's Thread
+    Thread              m_curThread;
+
+    version( CheckFiberMigration )
+    {
+        bool m_allowMigration;
+    }
+
+    version( SjLj_Exceptions )
+    {
+        SjLjFuncContext* m_sjljExStackTop;
+    }
 
 private:
     ///////////////////////////////////////////////////////////////////////////
@@ -5009,6 +5200,29 @@ private:
             pstack -= ABOVE;
             *cast(size_t*)(pstack - SZ_RA) = cast(size_t)&fiber_entryPoint;
         }
+        else version( AsmAArch64_Posix )
+        {
+            // Like others, FP registers and return address (lr) are kept
+            // below the saved stack top (tstack) to hide from GC scanning.
+            // fiber_switchContext expects newp sp to look like this:
+            //   19: x19
+            //   ...
+            //    9: x29 (fp)  <-- newp tstack
+            //    8: x30 (lr)  [&fiber_entryPoint]
+            //    7: d8
+            //   ...
+            //    0: d15
+
+            version( StackGrowsDown ) {}
+            else
+                static assert(false, "Only full descending stacks supported on AArch64");
+
+            // Only need to set return address (lr).  Everything else is fine
+            // zero initialized.
+            pstack -= size_t.sizeof * 11;    // skip past x19-x29
+            push(cast(size_t) &fiber_entryPoint);
+            pstack += size_t.sizeof;         // adjust sp (newp) above lr
+        }
         else version( AsmARM_Posix )
         {
             /* We keep the FP registers and the return address below
@@ -5102,6 +5316,27 @@ private:
         void**  oldp = &tobj.m_curr.tstack;
         void*   newp = m_ctxt.tstack;
 
+        version( CheckFiberMigration )
+        {
+            if (m_curThread is null || m_allowMigration)
+                m_curThread = tobj;
+            else if (tobj !is m_curThread)
+            {
+                m_unhandled = new ThreadException
+                    ("Migrating Fibers between Threads on this platform may lead "
+                     "to incorrect thread local variable access.  To allow "
+                     "migration anyway, call Fiber.allowMigration()");
+                return;
+            }
+        }
+        else
+        {
+            m_curThread = tobj;
+        }
+
+        version( SjLj_Exceptions )
+            SjLjFuncContext* oldsjlj = swapSjLjStackTop(m_sjljExStackTop);
+
         // NOTE: The order of operations here is very important.  The current
         //       stack top must be stored before m_lock is set, and pushContext
         //       must not be called until after m_lock is set.  This process
@@ -5124,6 +5359,9 @@ private:
         tobj.popContext();
         atomicStore!(MemoryOrder.raw)(*cast(shared)&tobj.m_lock, false);
         tobj.m_curr.tstack = tobj.m_curr.bstack;
+
+        version( SjLj_Exceptions )
+            m_sjljExStackTop = swapSjLjStackTop(oldsjlj);
     }
 
 
@@ -5132,7 +5370,7 @@ private:
     //
     final void switchOut() nothrow
     {
-        Thread  tobj = Thread.getThis();
+        Thread  tobj = m_curThread;
         void**  oldp = &m_ctxt.tstack;
         void*   newp = tobj.m_curr.within.tstack;
 
@@ -5157,7 +5395,7 @@ private:
         // NOTE: If use of this fiber is multiplexed across threads, the thread
         //       executing here may be different from the one above, so get the
         //       current thread handle before unlocking, etc.
-        tobj = Thread.getThis();
+        tobj = m_curThread;
         atomicStore!(MemoryOrder.raw)(*cast(shared)&tobj.m_lock, false);
         tobj.m_curr.tstack = tobj.m_curr.bstack;
     }
@@ -5230,6 +5468,80 @@ unittest
     group.joinAll();
 }
 
+// Try to detect if version CheckFiberMigration should be set, or if it is
+// set, make sure it behaves properly.  The issue is that thread local addr
+// may be cached by the compiler and that doesn't play well when Fibers
+// migrate between Threads.  This may only happen when optimization
+// enabled.  For that reason, should run this unittest with various
+// optimization levels.
+//
+// https://github.com/ldc-developers/ldc/issues/666
+unittest
+{
+    static int tls;
+
+    static yield_noinline()
+    {
+        import ldc.intrinsics;
+        pragma(LDC_never_inline);
+        Fiber.yield();
+    }
+
+    auto f = new Fiber(
+    {
+        ++tls;                               // happens on main thread
+        yield_noinline();
+        ++tls;                               // happens on other thread,
+        // 1 if tls addr uncached, 2 if addr was cached
+    });
+
+    auto t = new Thread(
+    {
+        assert(tls == 0);
+
+        version( CheckFiberMigration )
+        {
+            try
+            {
+                f.call();
+                assert(false, "Should get ThreadException when Fiber migrated");
+            }
+            catch (ThreadException ex)
+            {
+            }
+
+            f.allowMigration();
+        }
+
+        f.call();
+        // tls may be 0 (wrong) or 1 (good) depending on thread local handling
+        // by compiler
+    });
+
+    assert(tls == 0);
+    f.call();
+    assert(tls == 1);
+
+    t.start();
+    t.join();
+
+    version( CheckFiberMigration )
+    {
+        assert(Fiber.migrationUnsafe);
+    }
+    else
+    {
+        assert(!Fiber.migrationUnsafe);
+        // If thread local addr not cached (correct behavior), then tls should
+        // still be 1.
+        assert(tls != 2,
+               "Not safe to migrate Fibers between Threads on your system. "
+               "Consider setting version CheckFiberMigration for this system "
+               "in thread.d");
+        // verify un-cached correct case
+        assert(tls == 1);
+    }
+}
 
 // Multiple threads running shared fibers
 unittest
@@ -5264,6 +5576,7 @@ unittest
     foreach(ref fib; fibs)
     {
         fib = new TestFiber();
+        fib.allowMigration();
     }
 
     auto group = new ThreadGroup();

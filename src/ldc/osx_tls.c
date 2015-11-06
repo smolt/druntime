@@ -18,6 +18,18 @@
 #include <stdio.h>
 
 /*
+ * For iOS, using TLS functions from libiphoneossup,
+ * https://github.com/smolt/iphoneos-apple-support
+ * It renames the dyld private API calls by prepending "ios".
+ */
+#ifdef __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__
+#define dyld_register_tlv_state_change_handler \
+    iosdyld_register_tlv_state_change_handler
+#define dyld_enumerate_tlv_storage \
+    iosdyld_enumerate_tlv_storage
+#endif
+
+/*
  * Declarations from dyld_priv.h, available on 10.7+.
  */
 enum dyld_tlv_states {
