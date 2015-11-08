@@ -22,6 +22,9 @@ nothrow:
 version (PPC)   version = PPC_Any;
 version (PPC64) version = PPC_Any;
 
+version (X86) version = X86_Any;
+version (X86_64) version = X86_Any;
+
 version( MinGW )
     version = GNUFP;
 version( CRuntime_Glibc )
@@ -158,12 +161,38 @@ else version( CRuntime_Microsoft )
 }
 else version ( OSX )
 {
-    version ( BigEndian )
+    version ( ARM_Soft )
+    {
+        alias fenv_t = int;
+        alias fexcept_t = ushort;
+    }
+    else version ( ARM )
+    {
+        struct fenv_t
+        {
+            uint __fpscr;
+            uint __reserved0;
+            uint __reserved1;
+            uint __reserved2;
+        }
+
+        alias ushort fexcept_t;
+    }
+    else version ( AArch64 )
+    {
+        struct fenv_t {
+            ulong __fpsr;
+            ulong __fpcr;
+        }
+
+        alias ushort fexcept_t;
+    }
+    else version ( PPC )
     {
         alias uint fenv_t;
         alias uint fexcept_t;
     }
-    version ( LittleEndian )
+    else version ( X86_Any )
     {
         struct fenv_t
         {
@@ -257,6 +286,89 @@ version( CRuntime_Microsoft )
         FE_TOWARDZERO   = 0x300, ///
     }
 }
+else version ( OSX )
+{
+    version ( ARM_Soft )
+    {
+        enum
+        {
+            FE_ALL_EXCEPT = 0,
+            FE_TONEAREST = 0
+        }
+    }
+    else version ( ARM )
+    {
+        enum
+        {
+            FE_INEXACT     = 0x0010,
+            FE_UNDERFLOW   = 0x0008,
+            FE_OVERFLOW    = 0x0004,
+            FE_DIVBYZERO   = 0x0002,
+            FE_INVALID     = 0x0001,
+            FE_FLUSHTOZERO = 0x0080, /// ARM-specific input denormal exception
+            FE_ALL_EXCEPT  = 0x009f,
+            FE_TONEAREST   = 0x00000000,
+            FE_UPWARD      = 0x00400000,
+            FE_DOWNWARD    = 0x00800000,
+            FE_TOWARDZERO  = 0x00C00000
+        }
+    }
+    else version ( AArch64 )
+    {
+        // same as ARM - maybe should combine
+        enum
+        {
+            FE_INEXACT     = 0x0010,
+            FE_UNDERFLOW   = 0x0008,
+            FE_OVERFLOW    = 0x0004,
+            FE_DIVBYZERO   = 0x0002,
+            FE_INVALID     = 0x0001,
+            FE_FLUSHTOZERO = 0x0080, /// ARM-specific input denormal exception
+            FE_ALL_EXCEPT  = 0x009f,
+            FE_TONEAREST   = 0x00000000,
+            FE_UPWARD      = 0x00400000,
+            FE_DOWNWARD    = 0x00800000,
+            FE_TOWARDZERO  = 0x00C00000
+        }
+    }
+    else version ( X86_Any )
+    {
+        enum
+        {
+            FE_INEXACT         = 0x0020,
+            FE_UNDERFLOW       = 0x0010,
+            FE_OVERFLOW        = 0x0008,
+            FE_DIVBYZERO       = 0x0004,
+            FE_INVALID         = 0x0001,
+            FE_DENORMALOPERAND = 0x0002,   /// Intel-specific denormal operand
+            FE_ALL_EXCEPT      = 0x003f,
+            FE_TONEAREST       = 0x0000,
+            FE_DOWNWARD        = 0x0400,
+            FE_UPWARD          = 0x0800,
+            FE_TOWARDZERO      = 0x0c00
+        }
+    }
+    else version ( PPC )
+    {
+        enum
+        {
+            FE_INEXACT    = 0x02000000,
+            FE_DIVBYZERO  = 0x04000000,
+            FE_UNDERFLOW  = 0x08000000,
+            FE_OVERFLOW   = 0x10000000,
+            FE_INVALID    = 0x20000000,
+            FE_ALL_EXCEPT = 0x3E000000,
+            FE_TONEAREST  = 0x00000000,
+            FE_TOWARDZERO = 0x00000001,
+            FE_UPWARD     = 0x00000002,
+            FE_DOWNWARD   = 0x00000003
+        }
+    }
+    else
+    {
+        static assert( false, "Unsupported OSX architecture" );
+    }
+}
 else
 {
     enum
@@ -294,7 +406,7 @@ else version( CRuntime_Microsoft )
 }
 else version( OSX )
 {
-    private extern __gshared fenv_t _FE_DFL_ENV;
+    private extern __gshared const fenv_t _FE_DFL_ENV;
     ///
     enum FE_DFL_ENV = &_FE_DFL_ENV;
 }
@@ -397,4 +509,25 @@ else
     int feraiseexcept(int excepts);
     ///
     int feupdateenv(in fenv_t* envp);
+}
+
+version(LDC)
+{
+    void FORCE_EVAL(T)(T x) @nogc nothrow
+    {
+        import std.traits, ldc.llvmasm;
+        static if (isFloatingPoint!(T))
+        {
+            version (ARM)
+                __asm("", "w", x);
+            else version (AArch64)
+                     __asm("", "w", x);
+            else version (X86_Any)
+                     __asm("", "f", x);
+            else
+                static assert(false, "Not implemented for this architecture");
+        }
+        else
+            __asm("", "r", x);
+    }
 }

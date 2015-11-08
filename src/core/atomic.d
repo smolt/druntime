@@ -17,12 +17,31 @@ module core.atomic;
 
 version (LDC)
 {
+   version (iOS)
+   {
+       // Don't enabled 128BitCAS because of a codegen problem (optimizer
+       // generates a bad opcode that shows up in unittest).  Not sure if this
+       // is arm64 along with iOS or LLVM 3.6.1 only.
+       version(AArch64) version = iOS_AArch64_Workaround;
+
+       // TODO: revisit these to figure out why different
+       version (ARM)
+           enum has64BitCAS = false;
+       else version (X86)
+           enum has64BitCAS = false;
+       else
+           enum has64BitCAS = true;
+    }
+    else
     enum has64BitCAS = true;
 
     // Enable 128bit CAS for all 64bit platforms.
     // Do not enable for LLVM 3.4 or earlier: the
     // code generator cannot handle type i128 for
     // atomic instructions.
+    version(iOS_AArch64_Workaround)
+        enum has128BitCAS = false;
+    else
     version(D_LP64)
         enum has128BitCAS = true;
     else
@@ -377,7 +396,9 @@ else version( LDC )
         llvm_atomic_store!Int(*newPtr, target, _ordering!(ms));
     }
 
-    void atomicFence() nothrow
+    // Note: changed atomicFence to a template so compiler will inline intrinsic.
+    // Official druntime verison is non-template
+    void atomicFence()() nothrow
     {
         llvm_memory_fence();
     }
@@ -1719,6 +1740,7 @@ version( unittest )
         {
             while (!*f)
             {
+                atomicFence();
             }
 
             atomicFence();

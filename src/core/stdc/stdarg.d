@@ -355,6 +355,12 @@ version( LDC )
             ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
             return arg;
         }
+        else version( AArch64 )
+        {
+            T arg = *cast(T*)ap;
+            ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
+            return arg;
+        }
         else version( ARM )
         {
             T arg = *cast(T*)ap;
@@ -405,6 +411,11 @@ version( LDC )
             parmn = *cast(T*)ap;
             ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
         }
+        else version( AArch64 )
+        {
+            parmn = *cast(T*)ap;
+            ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
+        }
         else version( ARM )
         {
             parmn = *cast(T*)ap;
@@ -446,6 +457,14 @@ version( LDC )
                 p = (tsize > size_t.sizeof || (tsize & (tsize - 1)) != 0) ? *cast(char**)ap : ap;
                 ap += size_t.sizeof;
             }
+        }
+        else version( AArch64 )
+        {
+            // Wait until everyone updates to get TypeInfo.talign
+            //auto talign = ti.talign;
+            //auto p = cast(va_list) ((cast(size_t)ap + talign - 1) & ~(talign - 1));
+            auto p = ap;
+            ap = p + ((tsize + size_t.sizeof - 1) & ~(size_t.sizeof - 1));
         }
         else version( ARM )
         {
