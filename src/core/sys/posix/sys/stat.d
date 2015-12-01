@@ -632,29 +632,28 @@ version( CRuntime_Glibc )
 }
 else version( OSX )
 {
-    // iOS always uses 64-bit inode with normal stat() function (there is no
-    // stat64).  MacOS I think uses stat$INODE64 for 64-bit.  Anyway, I am
-    // only focusing on iOS, so will not type to meld with MacOS below.
-    version (iOS)
+    // _DARWIN_FEATURE_64_BIT_INODE stat is default for Mac OSX >10.5 and is
+    // only meaningful type for other OS X/Darwin variants (e.g. iOS).
+    // man stat(2) gives details.
+    struct stat64_t
     {
-        struct stat_t
+        dev_t       st_dev;
+        mode_t      st_mode;
+        nlink_t     st_nlink;
+        ino64_t     st_ino;
+        uid_t       st_uid;
+        gid_t       st_gid;
+        dev_t       st_rdev;
+        union
         {
-            dev_t       st_dev;
-            mode_t      st_mode;
-            nlink_t     st_nlink;
-            ulong       st_ino;
-            uid_t       st_uid;
-            gid_t       st_gid;
-            dev_t       st_rdev;
-
-            static if( false /*!_POSIX_C_SOURCE || _DARWIN_C_SOURCE*/ )
+            struct
             {
                 timespec  st_atimespec;
                 timespec  st_mtimespec;
                 timespec  st_ctimespec;
                 timespec  st_birthtimespec;
             }
-            else
+            struct
             {
                 time_t      st_atime;
                 c_long      st_atimensec;
@@ -665,52 +664,7 @@ else version( OSX )
                 time_t      st_birthtime;
                 c_long      st_birthtimensec;
             }
-
-            off_t       st_size;
-            blkcnt_t    st_blocks;
-            blksize_t   st_blksize;
-            uint        st_flags;
-            uint        st_gen;
-            int         st_lspare;
-            long[2]     st_qspare;
         }
-    }
-    else // !version (iOS)
-    {
-    struct stat_t
-    {
-      version ( DARWIN_USE_64_BIT_INODE )
-      {
-        dev_t       st_dev;
-        mode_t      st_mode;
-        nlink_t     st_nlink;
-        ino_t       st_ino;
-      }
-      else
-      {
-        dev_t       st_dev;
-        ino_t       st_ino;
-        mode_t      st_mode;
-        nlink_t     st_nlink;
-      }
-        uid_t       st_uid;
-        gid_t       st_gid;
-        dev_t       st_rdev;
-      static if( false /*!_POSIX_C_SOURCE || _DARWIN_C_SOURCE*/ )
-      {
-          timespec  st_atimespec;
-          timespec  st_mtimespec;
-          timespec  st_ctimespec;
-      }
-      else
-      {
-        time_t      st_atime;
-        c_long      st_atimensec;
-        time_t      st_mtime;
-        c_long      st_mtimensec;
-        time_t      st_ctime;
-        c_long      st_ctimensec;
-      }
         off_t       st_size;
         blkcnt_t    st_blocks;
         blksize_t   st_blksize;
@@ -719,7 +673,44 @@ else version( OSX )
         int         st_lspare;
         long[2]     st_qspare;
     }
+
+    struct stat32_t
+    {
+        dev_t       st_dev;
+        ino32_t     st_ino;
+        mode_t      st_mode;
+        nlink_t     st_nlink;
+        uid_t       st_uid;
+        gid_t       st_gid;
+        dev_t       st_rdev;
+        union
+        {
+            struct
+            {
+                timespec  st_atimespec;
+                timespec  st_mtimespec;
+                timespec  st_ctimespec;
+            }
+            struct
+            {
+                time_t      st_atime;
+                c_long      st_atimensec;
+                time_t      st_mtime;
+                c_long      st_mtimensec;
+                time_t      st_ctime;
+                c_long      st_ctimensec;
+            }
+        }
+        off_t       st_size;
+        blkcnt_t    st_blocks;
+        blksize_t   st_blksize;
+        uint        st_flags;
+        uint        st_gen;
+        int         st_lspare;
+        long[2]     st_qspare;
     }
+
+    alias stat_t = stat64_t;
 
     enum S_IRUSR    = 0x100;  // octal 0400
     enum S_IWUSR    = 0x080;  // octal 0200
@@ -1141,9 +1132,32 @@ else version (Solaris)
 }
 else version( OSX )
 {
-    int   fstat(int, stat_t*);
-    int   lstat(in char*, stat_t*);
-    int   stat(in char*, stat_t*);
+    version ( iOS ) // TODO: flip logic and version on OSX when they are exclusive
+    {
+        int fstat(int, stat_t*);
+        int lstat(in char*, stat_t*);
+        int stat(in char*, stat_t*);
+
+        alias lstat64 = lstat;
+        alias fstat64 = fstat;
+        alias stat64 = stat;
+    }
+    else // OSX
+    {
+        // OS X maintains backwards compatibility with older binaries using
+        // 32-bit inode functions by appending $INODE64 to newer 64-bit inode
+        // functions.
+        pragma(mangle, "fstat$INODE64") int fstat64(int, stat_t*);
+        pragma(mangle, "fstat")         int fstat32(int, stat32_t*);
+        pragma(mangle, "lstat$INODE64") int lstat64(in char*, stat_t*);
+        pragma(mangle, "lstat")         int lstat32(in char*, stat32_t*);
+        pragma(mangle, "stat$INODE64")  int stat64(in char*, stat_t*);
+        pragma(mangle, "stat")          int stat32(in char*, stat32_t*);
+
+        alias lstat = lstat64;
+        alias fstat = fstat64;
+        alias stat = stat64;
+    }
 }
 else version( FreeBSD )
 {
