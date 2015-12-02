@@ -19,6 +19,9 @@ private import core.stdc.stdint;
 private import core.sys.posix.time;     // for timespec
 public import core.sys.posix.sys.types; // for off_t, mode_t
 
+version (iOS) version = Darwin;
+version (OSX) version = Darwin;
+
 version (Posix):
 extern (C) nothrow @nogc:
 
@@ -630,7 +633,7 @@ version( CRuntime_Glibc )
         extern bool S_TYPEISSHM( stat_t* buf ) { return false; }
     }
 }
-else version( OSX )
+else version( Darwin )
 {
     // _DARWIN_FEATURE_64_BIT_INODE stat is default for Mac OSX >10.5 and is
     // only meaningful type for other OS X/Darwin variants (e.g. iOS).
@@ -1130,23 +1133,12 @@ else version (Solaris)
         }
     }
 }
-else version( OSX )
+else version( Darwin )
 {
-    version ( iOS ) // TODO: flip logic and version on OSX when they are exclusive
+    // OS X maintains backwards compatibility with older binaries using 32-bit
+    // inode functions by appending $INODE64 to newer 64-bit inode functions.
+    version( OSX )
     {
-        int fstat(int, stat_t*);
-        int lstat(in char*, stat_t*);
-        int stat(in char*, stat_t*);
-
-        alias lstat64 = lstat;
-        alias fstat64 = fstat;
-        alias stat64 = stat;
-    }
-    else // OSX
-    {
-        // OS X maintains backwards compatibility with older binaries using
-        // 32-bit inode functions by appending $INODE64 to newer 64-bit inode
-        // functions.
         pragma(mangle, "fstat$INODE64") int fstat64(int, stat_t*);
         pragma(mangle, "fstat")         int fstat32(int, stat32_t*);
         pragma(mangle, "lstat$INODE64") int lstat64(in char*, stat_t*);
@@ -1158,6 +1150,19 @@ else version( OSX )
         alias fstat = fstat64;
         alias stat = stat64;
     }
+    else version( iOS )
+    {
+        int fstat(int, stat_t*);
+        int lstat(in char*, stat_t*);
+        int stat(in char*, stat_t*);
+
+        alias lstat64 = lstat;
+        alias fstat64 = fstat;
+        alias stat64 = stat;
+    }
+    else
+        static assert(false, "Unsupported Darwin platform");
+
 }
 else version( FreeBSD )
 {
@@ -1208,7 +1213,7 @@ version( CRuntime_Glibc )
 
     int mknod(in char*, mode_t, dev_t);
 }
-else version( OSX )
+else version( Darwin )
 {
     enum S_IFMT     = 0xF000; // octal 0170000
     enum S_IFBLK    = 0x6000; // octal 0060000

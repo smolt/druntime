@@ -1915,6 +1915,8 @@ char[] mangleC(const(char)[] sym, char[] dst = null)
         enum string prefix = "_";
     else version(OSX)
         enum string prefix = "_";
+    else version(iOS)
+        enum string prefix = "_";
     else
         enum string prefix = "";
 

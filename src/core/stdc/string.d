@@ -14,6 +14,9 @@
 
 module core.stdc.string;
 
+version (OSX) version = Darwin;
+version (iOS) version = Darwin;
+
 extern (C):
 @system:
 nothrow:
@@ -72,7 +75,7 @@ version (CRuntime_Glibc)
     ///
     const(char)* strerror_r(int errnum, char* buf, size_t buflen);
 }
-else version (OSX)
+else version (Darwin)
 {
     int strerror_r(int errnum, char* buf, size_t buflen);
 }

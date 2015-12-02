@@ -14,6 +14,9 @@
 
 module core.stdc.errno;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 @trusted: // Only manipulates errno.
 nothrow:
 @nogc:
@@ -822,7 +825,7 @@ else version( linux )
         static assert(false, "Architecture not supported.");
     }
 }
-else version( OSX )
+else version( Darwin )
 {
     enum EPERM              = 1;        /// Operation not permitted
     enum ENOENT             = 2;        /// No such file or directory

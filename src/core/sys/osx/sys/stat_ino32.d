@@ -6,7 +6,6 @@
  */
 module core.sys.osx.sys.stat_ino32;
 
-version (iOS) {} else
 version (OSX):
 
 public import core.sys.posix.sys.stat;

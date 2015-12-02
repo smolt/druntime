@@ -16,6 +16,9 @@ module core.sys.posix.net.if_;
 
 private import core.sys.posix.config;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C) nothrow @nogc:
 
@@ -52,7 +55,7 @@ version( CRuntime_Glibc )
     if_nameindex_t* if_nameindex();
     void            if_freenameindex(if_nameindex_t*);
 }
-else version( OSX )
+else version( Darwin )
 {
     struct if_nameindex_t
     {

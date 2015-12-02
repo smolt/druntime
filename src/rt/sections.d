@@ -10,6 +10,9 @@
 
 module rt.sections;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (LDC)
     public import rt.sections_ldc;
 version (CRuntime_Glibc)
@@ -18,7 +21,7 @@ else version (FreeBSD)
     public import rt.sections_elf_shared;
 else version (Solaris)
     public import rt.sections_solaris;
-else version (OSX)
+else version (Darwin)
     public import rt.sections_osx;
 else version (CRuntime_DigitalMars)
     public import rt.sections_win32;

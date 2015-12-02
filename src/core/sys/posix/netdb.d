@@ -20,6 +20,9 @@ public import core.sys.posix.netinet.in_; // for in_port_t, in_addr_t
 public import core.sys.posix.sys.types;   // for ino_t
 public import core.sys.posix.sys.socket;  // for socklen_t
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C):
 nothrow:
@@ -219,7 +222,7 @@ version( CRuntime_Glibc )
     enum EAI_SYSTEM         = -11;
     enum EAI_OVERFLOW       = -12;
 }
-else version( OSX )
+else version( Darwin )
 {
     struct hostent
     {

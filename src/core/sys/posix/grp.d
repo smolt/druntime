@@ -17,6 +17,9 @@ module core.sys.posix.grp;
 private import core.sys.posix.config;
 public import core.sys.posix.sys.types; // for gid_t, uid_t
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C):
 nothrow:
@@ -48,7 +51,7 @@ version( linux )
         char**  gr_mem;
     }
 }
-else version( OSX )
+else version( Darwin )
 {
     struct group
     {
@@ -109,7 +112,7 @@ version( CRuntime_Glibc )
     int getgrnam_r(in char*, group*, char*, size_t, group**);
     int getgrgid_r(gid_t, group*, char*, size_t, group**);
 }
-else version( OSX )
+else version( Darwin )
 {
     int getgrnam_r(in char*, group*, char*, size_t, group**);
     int getgrgid_r(gid_t, group*, char*, size_t, group**);
@@ -147,7 +150,7 @@ version( CRuntime_Glibc )
     @trusted void endgrent();
     @trusted void setgrent();
 }
-else version( OSX )
+else version( Darwin )
 {
     group* getgrent();
     @trusted void endgrent();

@@ -12,15 +12,26 @@
 
 module rt.sections_osx;
 
+version (OSX) version = Darwin;
+version (iOS) version = Darwin;
+
 version (LDC) {} else
-version(OSX):
+version(Darwin):
 
 // debug = PRINTF;
 import core.stdc.stdio;
 import core.stdc.string, core.stdc.stdlib;
 import core.sys.posix.pthread;
-import core.sys.osx.mach.dyld;
-import core.sys.osx.mach.getsect;
+version( OSX )
+{
+    import core.sys.osx.mach.dyld;
+    import core.sys.osx.mach.getsect;
+}
+version( iOS )
+{
+    import core.sys.ios.mach.dyld;
+    import core.sys.ios.mach.getsect;
+}
 import rt.deh, rt.minfo;
 import rt.util.container.array;
 
@@ -200,12 +211,12 @@ extern (C) void sections_osx_onAddImage(in mach_header* h, intptr_t slide)
         // take the sections from the last static image which is the executable
         if (_isRuntimeInitialized)
         {
-            fprintf(stderr, "Loading shared libraries isn't yet supported on OSX.\n");
+            fprintf(stderr, "Loading shared libraries isn't yet supported on Darwin.\n");
             return;
         }
         else if (_sections.modules.ptr !is null)
         {
-            fprintf(stderr, "Shared libraries are not yet supported on OSX.\n");
+            fprintf(stderr, "Shared libraries are not yet supported on Darwin.\n");
         }
 
         debug(PRINTF) printf("  minfodata\n");

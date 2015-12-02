@@ -16,6 +16,9 @@ module core.sys.posix.dlfcn;
 
 private import core.sys.posix.config;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C):
 nothrow:
@@ -123,7 +126,7 @@ version( CRuntime_Glibc )
         }
     }
 }
-else version( OSX )
+else version( Darwin )
 {
     enum RTLD_LAZY      = 0x00001;
     enum RTLD_NOW       = 0x00002;

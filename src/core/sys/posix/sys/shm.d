@@ -18,6 +18,9 @@ private import core.sys.posix.config;
 public import core.sys.posix.sys.types; // for pid_t, time_t, key_t
 public import core.sys.posix.sys.ipc;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C) nothrow @nogc:
 
@@ -121,7 +124,7 @@ else version( FreeBSD )
     int   shmdt(in void*);
     int   shmget(key_t, size_t, int);
 }
-else version( OSX )
+else version( Darwin )
 {
 
 }

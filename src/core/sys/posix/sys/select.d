@@ -23,6 +23,9 @@ public import core.sys.posix.signal;    // for sigset_t
 //debug=select;  // uncomment to turn on debugging printf's
 version(unittest) import core.stdc.stdio: printf;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C) nothrow @nogc:
 
@@ -131,7 +134,7 @@ version( CRuntime_Glibc )
     int pselect(int, fd_set*, fd_set*, fd_set*, in timespec*, in sigset_t*);
     int select(int, fd_set*, fd_set*, fd_set*, timeval*);
 }
-else version( OSX )
+else version( Darwin )
 {
     private
     {
@@ -166,7 +169,19 @@ else version( OSX )
         fdset.fds_bits[0 .. $] = 0;
     }
 
-    // Use -D_DARWIN_UNLIMITED_SELECT functions extensions that allow nfds > 1024
+    // Darwin has a select extension that allow nfds > FD_SETSIZE (1024). For
+    // C, the extension is requested by defining either _DARWIN_C_SOURCE or
+    // _DARWIN_UNLIMITED_SELECT before including system files.  The extension
+    // uses the suffix "$DARWIN_EXTSN" on function symbols.  See sys/select.h
+    // for details.
+    //
+    // Before OS X 10.5, select by default allowed nfds > 1024.  This version
+    // continues to be available for binary backward compatibility as symbol
+    // "select".  OS X >= 10.5 changed the default behavior to return an error
+    // if nfds > 1024 and added a suffix to select symbols ("select$1050" for
+    // 64-bit and "select$UNIX2003" for 32-bit) to use this API.  Darwin
+    // variants (e.g. iOS) after 10.5 don't add this suffix because there is
+    // no compatibity issue.
     pragma(mangle, "pselect$DARWIN_EXTSN")
     int pselect(int, fd_set*, fd_set*, fd_set*, in timespec*, in sigset_t*);
     pragma(mangle, "select$DARWIN_EXTSN")

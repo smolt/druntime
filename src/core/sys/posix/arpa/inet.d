@@ -18,6 +18,9 @@ private import core.sys.posix.config;
 public import core.stdc.inttypes; // for uint32_t, uint16_t
 public import core.sys.posix.sys.socket; // for socklen_t
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C) nothrow @nogc:
 
@@ -74,7 +77,7 @@ version( CRuntime_Glibc )
     const(char)*    inet_ntop(int, in void*, char*, socklen_t);
     int             inet_pton(int, in char*, void*);
 }
-else version( OSX )
+else version( Darwin )
 {
     alias uint16_t in_port_t;
     alias uint32_t in_addr_t;
@@ -227,7 +230,7 @@ version( linux )
 {
     enum INET6_ADDRSTRLEN = 46;
 }
-else version( OSX )
+else version( Darwin )
 {
     enum INET6_ADDRSTRLEN = 46;
 }

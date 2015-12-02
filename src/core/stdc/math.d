@@ -598,6 +598,7 @@ else version( MinGW )
 }
 else version( iOS )
 {
+    // TODO: combine with OSX below?
     enum
     {
         FP_NAN         = 1,

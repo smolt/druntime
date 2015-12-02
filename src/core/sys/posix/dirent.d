@@ -18,6 +18,9 @@ module core.sys.posix.dirent;
 private import core.sys.posix.config;
 public import core.sys.posix.sys.types; // for ino_t
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;
+
 version (Posix):
 extern (C):
 nothrow:
@@ -81,7 +84,7 @@ version( CRuntime_Glibc )
         dirent* readdir(DIR*);
     }
 }
-else version( OSX )
+else version( Darwin )
 {
     enum
     {
@@ -126,15 +129,17 @@ else version( OSX )
         // Managed by OS
     }
 
-    version (iOS)
-    {
-        dirent* readdir(DIR*);
-    }
-    else // OSX
+    // OS X maintains backwards compatibility with older binaries using 32-bit
+    // inode functions by appending $INODE64 to newer 64-bit inode functions.
+    version( OSX )
     {
         pragma(mangle, "readdir$INODE64") dirent64* readdir64(DIR*);
         pragma(mangle, "readdir")         dirent32* readdir32(DIR*);
         alias readdir = readdir64;
+    }
+    else
+    {
+        dirent* readdir(DIR*);
     }
 }
 else version( FreeBSD )
@@ -229,16 +234,11 @@ else
     static assert(false, "Unsupported platform");
 }
 
-version (OSX)
+// Only OS X out of the Darwin family needs special treatment.  Other Darwins
+// are fine with normal symbol names for these functions
+version( OSX )
 {
-    version (iOS)
-    {
-        int     closedir(DIR*);
-        DIR*    opendir(in char*);
-        //dirent* readdir(DIR*);
-        void    rewinddir(DIR*);
-    }
-    else version( D_LP64 )  // OSX
+    version( D_LP64 )
     {
         int     closedir(DIR*);
         pragma(mangle, "opendir$INODE64") DIR* opendir64(in char*);
@@ -292,18 +292,15 @@ version( CRuntime_Glibc )
 }
 else version( OSX )
 {
-    version( iOS )
-    {
-        int readdir_r(DIR*, dirent*, dirent**);
-    }
-    else // OSX
-    {
-        pragma(mangle, "readdir_r$INODE64")
-            int readdir64_r(DIR*, dirent64*, dirent64**);
-        pragma(mangle, "readdir_r")
-            int readdir32_r(DIR*, dirent32*, dirent32**);
-        alias readdir_r = readdir64_r;
-    }
+    pragma(mangle, "readdir_r$INODE64")
+        int readdir64_r(DIR*, dirent64*, dirent64**);
+    pragma(mangle, "readdir_r")
+        int readdir32_r(DIR*, dirent32*, dirent32**);
+    alias readdir_r = readdir64_r;
+}
+else version( iOS )
+{
+    int readdir_r(DIR*, dirent*, dirent**);
 }
 else version( FreeBSD )
 {
@@ -348,14 +345,9 @@ else version( FreeBSD )
     void   seekdir(DIR*, c_long);
     c_long telldir(DIR*);
 }
-else version (OSX)
+else version( OSX )
 {
-    version (iOS)
-    {
-        void   seekdir(DIR*, c_long);
-        c_long telldir(DIR*);
-    }
-    else version ( D_LP64 ) // OSX
+    version( D_LP64 )
     {
         pragma(mangle, "seekdir$INODE64") void seekdir64(DIR*, c_long);
         pragma(mangle, "seekdir")         void seekdir32(DIR*, c_long);
@@ -377,6 +369,11 @@ else version (OSX)
         pragma(mangle, "telldir$UNIX2003") c_long telldir32(DIR*);
         alias telldir = telldir64;
     }
+}
+else version( iOS )
+{
+    void   seekdir(DIR*, c_long);
+    c_long telldir(DIR*);
 }
 else version (Solaris)
 {

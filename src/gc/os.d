@@ -32,8 +32,14 @@ else version (Posix)
     import core.sys.posix.sys.mman;
     version (FreeBSD) import core.sys.freebsd.sys.mman : MAP_ANON;
     version (CRuntime_Glibc) import core.sys.linux.sys.mman : MAP_ANON;
+    // TODO: probably neither of these are needed as MAP_ANON is in
+    // core.sys.posix.sys.mmap
     version (OSX) import core.sys.osx.sys.mman : MAP_ANON;
+    version (iOS) import core.sys.ios.sys.mman : MAP_ANON;
     import core.stdc.stdlib;
+
+    version( OSX ) version = Darwin;
+    version( iOS ) version = Darwin;             // TODO: verify this
 
     //version = GC_Use_Alloc_MMap;
 }
@@ -168,8 +174,9 @@ version (Windows)
         }
     }
 }
-else version (OSX)
+else version (Darwin)
 {
+    // TODO: does this make sense for iOS?
     bool isLowOnMem(size_t mapped) nothrow @nogc
     {
         enum GB = 2 ^^ 30;

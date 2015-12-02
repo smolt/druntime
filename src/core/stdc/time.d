@@ -17,6 +17,9 @@ module core.stdc.time;
 
 private import core.stdc.config;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;
+
 extern (C):
 @trusted: // There are only a few functions here that use unsafe C strings.
 nothrow:
@@ -74,9 +77,9 @@ version( Windows )
 {
     enum clock_t CLOCKS_PER_SEC = 1000;
 }
-else version( OSX )
+else version( Darwin )
 {
-    enum clock_t CLOCKS_PER_SEC = 100;
+    enum clock_t CLOCKS_PER_SEC = 1_000_000; // since OSX 10.5
 }
 else version( FreeBSD )
 {
@@ -91,11 +94,28 @@ else version (CRuntime_Bionic)
     enum clock_t CLOCKS_PER_SEC = 1_000_000;
 }
 
+
+version( OSX )
+{
+    version( D_LP64 ) {} else version = OSX32;
+}
+
+
 ///
+version (OSX32)
+{
+    pragma(mangle, "clock$UNIX2003") clock_t clock();
+}
+else
 clock_t clock();
 ///
 double  difftime(time_t time1, time_t time0);
 ///
+version (OSX32)
+{
+    pragma(mangle, "mktime$UNIX2003") time_t  mktime(tm* timeptr);
+}
+else
 time_t  mktime(tm* timeptr);
 ///
 time_t  time(time_t* timer);
@@ -108,6 +128,12 @@ tm*     gmtime(in time_t* timer);
 ///
 tm*     localtime(in time_t* timer);
 ///
+version (OSX32)
+{
+    pragma(mangle, "strftime$UNIX2003")
+    @system size_t  strftime(char* s, size_t maxsize, in char* format, in tm* timeptr);
+}
+else
 @system size_t  strftime(char* s, size_t maxsize, in char* format, in tm* timeptr);
 
 version( Windows )
@@ -124,7 +150,7 @@ version( Windows )
     ///
     extern __gshared const(char)*[2] tzname; // non-standard
 }
-else version( OSX )
+else version( Darwin )
 {
     ///
     void tzset();                            // non-standard

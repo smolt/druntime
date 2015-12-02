@@ -16,6 +16,9 @@ module core.sys.posix.netinet.tcp;
 
 private import core.sys.posix.config;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C):
 
@@ -30,7 +33,7 @@ version( linux )
 {
     enum TCP_NODELAY = 1;
 }
-else version( OSX )
+else version( Darwin )
 {
     enum TCP_NODELAY = 1;
 }
