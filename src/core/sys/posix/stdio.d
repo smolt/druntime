@@ -268,6 +268,10 @@ version( OSX )
 {
     enum P_tmpdir  = "/var/tmp";
 }
+version( iOS )                               // TODO: may need change
+{
+    enum P_tmpdir  = "/var/tmp";
+}
 version( FreeBSD )
 {
     enum P_tmpdir  = "/var/tmp/";

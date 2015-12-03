@@ -80,10 +80,20 @@ private
 {
     version (OSX)
     {
+        version = Darwin;
         import core.sys.osx.mach.dyld;
         import core.sys.osx.mach.getsect;
         import core.sys.osx.mach.loader;
-
+    }
+    version (iOS)
+    {
+        version = Darwin;
+        import core.sys.ios.mach.dyld;
+        import core.sys.ios.mach.getsect;
+        import core.sys.ios.mach.loader;
+    }
+    version (Darwin)
+    {
         struct Section
         {
             immutable(char)* segment;
@@ -348,7 +358,7 @@ void initSections()
         globalSectionGroup._gcRanges.insertBack(start[0 .. (end - start)]);
     }
 
-    version (OSX)
+    version (Darwin)
     {
         static extern(C) void scanSections(in mach_header* hdr, ptrdiff_t slide)
         {
@@ -404,7 +414,7 @@ void finiSections()
 
 private
 {
-    version (OSX)
+    version (Darwin)
     {
         extern(C) void _d_dyld_getTLSRange(void*, void**, size_t*);
         private ubyte dummyTlsSymbol;
@@ -425,7 +435,7 @@ private
 void[] initTLSRanges()
 {
     debug(PRINTF) printf("initTLSRanges called\n");
-    version (OSX)
+    version (Darwin)
     {
         void* start = null;
         size_t size = 0;

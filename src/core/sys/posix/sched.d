@@ -19,6 +19,9 @@ private import core.sys.posix.config;
 public import core.sys.posix.time;
 public import core.sys.posix.sys.types;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C):
 nothrow:
@@ -60,7 +63,7 @@ version( CRuntime_Glibc )
     enum SCHED_RR       = 2;
     //SCHED_SPORADIC (SS|TSP)
 }
-else version( OSX )
+else version( Darwin )
 {
     enum SCHED_OTHER    = 1;
     enum SCHED_FIFO     = 4;
@@ -136,7 +139,7 @@ version( linux )
 {
     int sched_yield();
 }
-else version( OSX )
+else version( Darwin )
 {
     int sched_yield();
 }
@@ -172,7 +175,7 @@ version( CRuntime_Glibc )
     int sched_get_priority_min(int);
     int sched_rr_get_interval(pid_t, timespec*);
 }
-else version( OSX )
+else version( Darwin )
 {
     int sched_get_priority_min(int);
     int sched_get_priority_max(int);

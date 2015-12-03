@@ -19,6 +19,9 @@ private import core.sys.posix.config;
 private import core.stdc.stdint;
 public import core.stdc.stddef;
 
+version (iOS) version = Darwin;
+version (OSX) version = Darwin;
+
 version (Posix):
 extern (C):
 
@@ -101,17 +104,13 @@ version( CRuntime_Glibc )
     alias slong_t   time_t;
     alias uint      uid_t;
 }
-else version( OSX )
+else version( Darwin )
 {
     alias long      blkcnt_t;
     alias int       blksize_t;
     alias int       dev_t;
     alias uint      gid_t;
-    version( DARWIN_USE_64_BIT_INODE ) {
-        alias ulong ino_t;
-    } else {
-        alias uint  ino_t;
-    }
+    alias ulong     ino_t;
     alias ushort    mode_t;
     alias ushort    nlink_t;
     alias long      off_t;
@@ -249,7 +248,7 @@ version( CRuntime_Glibc )
     alias slong_t   suseconds_t;
     alias uint      useconds_t;
 }
-else version( OSX )
+else version( Darwin )
 {
     alias uint   fsblkcnt_t;
     alias uint   fsfilcnt_t;
@@ -537,11 +536,11 @@ version (CRuntime_Glibc)
 
     alias c_ulong pthread_t;
 }
-else version( OSX )
+else version( Darwin )
 {
     version( D_LP64 )
     {
-        enum __PTHREAD_SIZE__               = 1168;
+        enum __PTHREAD_SIZE__               = 8176;
         enum __PTHREAD_ATTR_SIZE__          = 56;
         enum __PTHREAD_MUTEXATTR_SIZE__     = 8;
         enum __PTHREAD_MUTEX_SIZE__         = 56;
@@ -553,7 +552,7 @@ else version( OSX )
     }
     else
     {
-        enum __PTHREAD_SIZE__               = 596;
+        enum __PTHREAD_SIZE__               = 4088;
         enum __PTHREAD_ATTR_SIZE__          = 36;
         enum __PTHREAD_MUTEXATTR_SIZE__     = 8;
         enum __PTHREAD_MUTEX_SIZE__         = 40;
@@ -809,7 +808,7 @@ else version( FreeBSD )
     alias void* pthread_barrier_t;
     alias void* pthread_barrierattr_t;
 }
-else version( OSX )
+else version( Darwin )
 {
 }
 else version (Solaris)

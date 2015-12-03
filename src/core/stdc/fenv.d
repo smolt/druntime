@@ -14,6 +14,9 @@
 
 module core.stdc.fenv;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 extern (C):
 @system:
 nothrow:
@@ -156,7 +159,7 @@ else version( CRuntime_Microsoft )
 
     alias fexcept_t = uint;
 }
-else version ( OSX )
+else version ( Darwin )
 {
     version ( BigEndian )
     {
@@ -292,7 +295,7 @@ else version( CRuntime_Microsoft )
     ///
     enum FE_DFL_ENV = &_Fenv0;
 }
-else version( OSX )
+else version( Darwin )
 {
     private extern __gshared fenv_t _FE_DFL_ENV;
     ///

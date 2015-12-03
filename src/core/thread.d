@@ -15,6 +15,8 @@ module core.thread;
 public import core.time; // for Duration
 import core.exception : onOutOfMemoryError;
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;
 
 private
 {
@@ -30,12 +32,6 @@ private
 
     alias rt_tlsgc_processGCMarks =
         externDFunc!("rt.tlsgc.processGCMarks", void function(void*, scope IsMarkedDg) nothrow);
-}
-
-version( Solaris )
-{
-    import core.sys.solaris.sys.priocntl;
-    import core.sys.solaris.sys.types;
 }
 
 version( Solaris )
@@ -245,6 +241,12 @@ else version( Posix )
         {
             import core.sys.osx.mach.thread_act;
             import core.sys.osx.pthread : pthread_mach_thread_np;
+        }
+
+        version( iOS )
+        {
+            import core.sys.ios.mach.thread_act;
+            import core.sys.ios.pthread : pthread_mach_thread_np;
         }
 
         version( GNU )
@@ -581,7 +583,7 @@ class Thread
             pthread_detach( m_addr );
             m_addr = m_addr.init;
         }
-        version( OSX )
+        version( Darwin )
         {
             m_tmach = m_tmach.init;
         }
@@ -691,7 +693,7 @@ class Thread
                         onThreadError( "Error creating thread" );
                 }
             }
-            version( OSX )
+            version( Darwin )
             {
                 m_tmach = pthread_mach_thread_np( m_addr );
                 if( m_tmach == m_tmach.init )
@@ -985,7 +987,7 @@ class Thread
             }
             else
             {
-                // NOTE: pthread_setschedprio is not implemented on OSX or FreeBSD, so use
+                // NOTE: pthread_setschedprio is not implemented on Darwin or FreeBSD, so use
                 //       the more complicated get/set sequence below.
                 int         policy;
                 sched_param param;
@@ -1137,7 +1139,7 @@ class Thread
         // NOTE: This function may not be called until thread_init has
         //       completed.  See thread_suspendAll for more information
         //       on why this might occur.
-        version( OSX )
+        version( Darwin )
         {
             return sm_this;
         }
@@ -1378,13 +1380,13 @@ private:
     //
     // Local storage
     //
-    version( OSX )
+    version( Darwin )
     {
         static Thread       sm_this;
     }
     else version( Posix )
     {
-        // On Posix (excluding OSX), pthread_key_t is explicitly used to
+        // On Posix (excluding Darwin), pthread_key_t is explicitly used to
         // store and access thread reference. This is needed
         // to avoid TLS access in signal handlers (malloc deadlock)
         // when using shared libraries, see issue 11981.
@@ -1420,7 +1422,7 @@ private:
     {
         HANDLE          m_hndl;
     }
-    else version( OSX )
+    else version( Darwin )
     {
         mach_port_t     m_tmach;
     }
@@ -1457,7 +1459,7 @@ private:
     //
     static void setThis( Thread t )
     {
-        version( OSX )
+        version( Darwin )
         {
             sm_this = t;
         }
@@ -1557,7 +1559,7 @@ private:
         static assert(false, "Architecture not supported." );
       }
     }
-    else version( OSX )
+    else version( Darwin )
     {
       version( X86 )
       {
@@ -1949,7 +1951,7 @@ extern (C) void thread_init()
 
     Thread.initLocks();
 
-    version( OSX )
+    version( Darwin )
     {
     }
     else version( Posix )
@@ -2026,7 +2028,7 @@ extern (C) void thread_term()
 {
     Thread.termLocks();
 
-    version( OSX )
+    version( Darwin )
     {
     }
     else version( Posix )
@@ -2089,7 +2091,7 @@ extern (C) Thread thread_attachThis()
     thisThread.m_tlsgcdata = rt_tlsgc_init();
     Thread.setThis( thisThread );
 
-    version( OSX )
+    version( Darwin )
     {
         thisThread.m_tmach = pthread_mach_thread_np( thisThread.m_addr );
         assert( thisThread.m_tmach != thisThread.m_tmach.init );
@@ -2604,7 +2606,7 @@ private void suspend( Thread t ) nothrow
             static assert(false, "Architecture not supported." );
         }
     }
-    else version( OSX )
+    else version( Darwin )
     {
         if( t.m_addr != pthread_self() && thread_suspend( t.m_tmach ) != KERN_SUCCESS )
         {
@@ -2804,7 +2806,7 @@ private void resume( Thread t ) nothrow
             t.m_curr.tstack = t.m_curr.bstack;
         t.m_reg[0 .. $] = 0;
     }
-    else version( OSX )
+    else version( Darwin )
     {
         if( t.m_addr != pthread_self() && thread_resume( t.m_tmach ) != KERN_SUCCESS )
         {
@@ -3310,9 +3312,10 @@ private void* getStackBottom() nothrow
             static assert(false, "Architecture not supported.");
         }
     }
-    else version (OSX)
+    else version (Darwin)
     {
-        import core.sys.osx.pthread;
+        version (OSX) import core.sys.osx.pthread;
+        version (iOS) import core.sys.ios.pthread;
         return pthread_get_stackaddr_np(pthread_self());
     }
     else version (CRuntime_Glibc)
@@ -3568,7 +3571,7 @@ private
         else version( Posix )
             version = AsmX86_Posix;
 
-        version( OSX )
+        version( Darwin )
             version = AlignFiberStackTo16Byte;
     }
     else version( D_InlineAsm_X86_64 )
@@ -3903,7 +3906,7 @@ private
 
 version( LDC )
 {
-    version( OSX )
+    version( Darwin )
     {
         version( ARM ) version = CheckFiberMigration;
         version( AArch64 ) version = CheckFiberMigration;
@@ -4600,6 +4603,7 @@ private:
             version (FreeBSD) import core.sys.freebsd.sys.mman : MAP_ANON;
             version (CRuntime_Glibc) import core.sys.linux.sys.mman : MAP_ANON;
             version (OSX) import core.sys.osx.sys.mman : MAP_ANON;
+            version (iOS) import core.sys.ios.sys.mman : MAP_ANON;
 
             static if( __traits( compiles, mmap ) )
             {

@@ -17,6 +17,9 @@ module core.sys.posix.utime;
 private import core.sys.posix.config;
 public import core.sys.posix.sys.types; // for time_t
 
+version (OSX) version = Darwin;
+version (iOS) version = Darwin;
+
 version (Posix):
 extern (C):
 nothrow:
@@ -45,7 +48,7 @@ version( linux )
 
     int utime(in char*, in utimbuf*);
 }
-else version( OSX )
+else version( Darwin )
 {
     struct utimbuf
     {

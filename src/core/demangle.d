@@ -12,6 +12,8 @@
 
 module core.demangle;
 
+version(OSX) version = Darwin;
+version(iOS) version = Darwin;
 
 debug(trace) import core.stdc.stdio : printf;
 debug(info) import core.stdc.stdio : printf;
@@ -1913,7 +1915,7 @@ char[] mangleC(const(char)[] sym, char[] dst = null)
 {
     version(Win32)
         enum string prefix = "_";
-    else version(OSX)
+    else version(Darwin)
         enum string prefix = "_";
     else
         enum string prefix = "";

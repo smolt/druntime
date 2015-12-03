@@ -16,6 +16,9 @@ public import core.stdc.signal;
 public import core.sys.posix.sys.types; // for pid_t
 //public import core.sys.posix.time;      // for timespec, now defined here
 
+version( OSX ) version = Darwin;
+version( iOS ) version = Darwin;             // TODO: verify this
+
 version (Posix):
 extern (C):
 //nothrow:  // this causes Issue 12738
@@ -347,7 +350,7 @@ version( linux )
     else
         static assert(0, "unimplemented");
 }
-else version( OSX )
+else version( Darwin )
 {
     //SIGABRT (defined in core.stdc.signal)
     enum SIGALRM    = 14;
@@ -508,7 +511,7 @@ else version (linux)
         static assert(false, "Architecture not supported.");
     }
 }
-else version( OSX )
+else version( Darwin )
 {
     struct sigaction_t
     {
@@ -725,7 +728,7 @@ version( CRuntime_Glibc )
     int sigsuspend(in sigset_t*);
     int sigwait(in sigset_t*, int*);
 }
-else version( OSX )
+else version( Darwin )
 {
     enum SIG_HOLD = cast(sigfn_t2) 5;
 
@@ -1392,7 +1395,7 @@ version( CRuntime_Glibc )
     int sigpause(int);
     int sigrelse(int);
 }
-else version( OSX )
+else version( Darwin )
 {
     enum SIGPOLL        = 7;
     enum SIGPROF        = 27;
@@ -1913,7 +1916,7 @@ version( linux )
         c_long  tv_nsec;
     }
 }
-else version( OSX )
+else version( Darwin )
 {
     struct timespec
     {
@@ -2024,7 +2027,7 @@ else version( FreeBSD )
     int sigtimedwait(in sigset_t*, siginfo_t*, in timespec*);
     int sigwaitinfo(in sigset_t*, siginfo_t*);
 }
-else version (OSX)
+else version (Darwin)
 {
 }
 else version (Solaris)
@@ -2087,7 +2090,7 @@ version( linux )
     int pthread_kill(pthread_t, int);
     int pthread_sigmask(int, in sigset_t*, sigset_t*);
 }
-else version( OSX )
+else version( Darwin )
 {
     int pthread_kill(pthread_t, int);
     int pthread_sigmask(int, in sigset_t*, sigset_t*);

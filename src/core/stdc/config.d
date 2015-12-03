@@ -120,6 +120,8 @@ else version( DigitalMars )
             alias real c_long_double;
         else version( OSX )
             alias real c_long_double;
+        else version( iOS )
+            alias real c_long_double;
     }
 }
 else version( GNU )
