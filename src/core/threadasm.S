@@ -515,7 +515,7 @@ fiber_switchContext:
 
     jr $ra // return
 
-#elif defined(__arm__) && defined(__ARM_EABI__)
+#elif defined(__arm__) && (defined(__ARM_EABI__) || defined(__APPLE__))
 /************************************************************************************
  * ARM ASM BITS
  ************************************************************************************/
@@ -551,10 +551,15 @@ fiber_switchContext:
 
 .text
 .align  2
+#ifdef __APPLE__
+.global _fiber_switchContext
+_fiber_switchContext:
+#else
 .global fiber_switchContext
 .type   fiber_switchContext, %function
 fiber_switchContext:
     .fnstart
+#endif
     push {r4-r11}
     // update the oldp pointer. Link register and floating point registers stored later to prevent the GC from
     // scanning them.
@@ -562,7 +567,14 @@ fiber_switchContext:
     // push r0 (or any other register) as well to keep stack 8byte aligned
     push {r0, lr}
 
-    #if defined(__ARM_PCS_VFP) || (defined(__ARM_PCS) && !defined(__SOFTFP__)) // ARM_HardFloat  || ARM_SoftFP
+    // ARM_HardFloat  || ARM_SoftFP
+    // this was conditional used by gdc version:
+    // #if defined(__ARM_PCS_VFP) || (defined(__ARM_PCS) && !defined(__SOFTFP__))
+    //
+    // clang defines __VFP_FP__ and !__SOFTFP for float-abi=hard or
+    // softfp.  Hopefully this new conditional will work out for iOS and other architectures
+    // make sure this is correct.
+    #if defined(__ARM_PCS_VFP) || ((defined(__ARM_PCS) || defined(__VFP_FP__)) && !defined(__SOFTFP__))
       vpush {d8-d15}
       // now switch over to the new stack. Need to subtract (8*8[d8-d15]+2*4[r0, lr]) to position stack pointer
       // below the last saved register. Remember we saved the SP before pushing [r0, lr, d8-d15]
@@ -590,5 +602,7 @@ fiber_switchContext:
     mov lr, #0
     // return by writing lr into pc
     mov pc, r1
+#ifndef __APPLE__
     .fnend
+#endif
 #endif

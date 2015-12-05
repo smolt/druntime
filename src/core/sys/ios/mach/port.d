@@ -16,12 +16,18 @@ module core.sys.ios.mach.port;
 version (iOS):
 extern (C):
 
-version( X86 )
-    version = i386;
-version( X86_64 )
-    version = i386;
-version( i386 )
+// All there iOS architectures share same types here
+version( X86 )     version = ValidArch;
+version( X86_64 )  version = ValidArch;
+version( ARM )     version = ValidArch;
+version( AArch64 ) version = ValidArch;
+
+version( ValidArch )
 {
     alias uint        natural_t;
     alias natural_t   mach_port_t;
+}
+else
+{
+    static assert(false, "iOS Architecture not supported.");
 }
