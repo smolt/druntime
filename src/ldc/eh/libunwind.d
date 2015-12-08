@@ -4,7 +4,7 @@
  */
 module ldc.eh.libunwind;
 
-version (Win64) {} else
+version (CRuntime_Microsoft) {} else
 {
 
 // debug = EH_personality;
@@ -17,11 +17,11 @@ import ldc.eh.fixedpool;
 debug (EH_personality)
     import core.stdc.stdio : printf;
 
-// Select setjump/longjump style exceptions.
+// Support for setjump/longjump style exceptions.
 //
 // references: in GCC, for example gcc-4.8, see
-// libgcc/unwind-sjlj.c
 // https://github.com/mirrors/gcc/blob/master/libgcc/unwind-sjlj.c
+// https://github.com/gcc-mirror/gcc/blob/master/libgcc/unwind-c.c
 //
 // the Apple version can be found at
 // https://www.opensource.apple.com/source/libunwind/libunwind-35.1/src/Unwind-sjlj.c
@@ -108,8 +108,8 @@ extern(C)
         }
         else
         {
-        _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception*);
-        void _Unwind_Resume(_Unwind_Exception*);
+            _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception*);
+            void _Unwind_Resume(_Unwind_Exception*);
         }
 
         ptrdiff_t _Unwind_GetIP(_Unwind_Context_Ptr context);
@@ -514,8 +514,10 @@ void _d_throw_exception(Object e)
 
 /// Called by our compiler-generate code to resume unwinding after a finally
 /// block (or dtor destruction block) has been run.
-void _d_eh_resume_unwind(_d_exception* exception_struct)
+void _d_eh_resume_unwind(void* ptr)
 {
+    auto exception_struct = cast(_d_exception*) ptr;
+
     debug(EH_personality)
     {
         printf("= Returning from cleanup block for %p (struct at %p)\n",
@@ -531,7 +533,7 @@ Object _d_eh_destroy_exception_struct(void* ptr)
     if (ptr == null)
         return null;
 
-    auto exception_struct = cast(_d_exception*)ptr;
+    auto exception_struct = cast(_d_exception*) ptr;
     auto obj = exception_struct.exception_object;
     ExceptionStructPool.free(exception_struct);
 
@@ -550,11 +552,11 @@ Object _d_eh_destroy_exception_struct(void* ptr)
     return obj;
 }
 
-Object _d_eh_enter_catch(_d_exception* exception_struct)
+Object _d_eh_enter_catch(void* ptr)
 {
-    auto obj = _d_eh_destroy_exception_struct(exception_struct);
+    auto obj = _d_eh_destroy_exception_struct(cast(_d_exception*) ptr);
     popCleanupBlockRecord();
     return obj;
 }
 
-} // !Win64
+} // !CRuntime_Microsoft

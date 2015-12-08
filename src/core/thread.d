@@ -5530,7 +5530,7 @@ unittest
     {
         assert(Fiber.migrationUnsafe);
     }
-    else
+    else version( FiberMigrationTest )
     {
         assert(!Fiber.migrationUnsafe);
         // If thread local addr not cached (correct behavior), then tls should
@@ -5541,6 +5541,16 @@ unittest
                "in thread.d");
         // verify un-cached correct case
         assert(tls == 1);
+    }
+    else
+    {
+        if (tls == 2)
+        {
+            import core.stdc.stdio : puts;
+            puts("Not safe to migrate Fibers between Threads on your system. "
+                 "Consider setting version CheckFiberMigration for this system "
+                 "in thread.d");
+        }
     }
 }
 

@@ -382,6 +382,14 @@ extern(C) void _d_dso_registry(CompilerDSOData* data)
         }
         else
         {
+            version (LDC)
+            {
+                // We don't want to depend on __tls_get_addr in non-Shared builds
+                // so we can actually link statically, so there must be only one
+                // D shared object.
+                _loadedDSOs.empty ||
+                    assert(0, "Only one D shared object allowed for static runtime");
+            }
             foreach (p; _loadedDSOs) assert(p !is pdso);
             _loadedDSOs.insertBack(pdso);
             _tlsRanges.insertBack(getTLSRange(pdso._tlsMod, pdso._tlsSize));
@@ -930,12 +938,40 @@ else version(MIPS64)
 else
     static assert( false, "Platform not supported." );
 
+// We do not want to depend on __tls_get_addr for non-Shared builds to support
+// linking against a static C runtime.
+version (X86)    version = X86_Any;
+version (X86_64) version = X86_Any;
+version (Shared) {} else version (linux) version (X86_Any)
+    version = Static_Linux_X86_Any;
+
 void[] getTLSRange(size_t mod, size_t sz)
 {
-    if (mod == 0)
-        return null;
+    version (Static_Linux_X86_Any)
+    {
+        version (X86)
+            static void* endOfBlock() { asm { naked; mov EAX, GS:[0]; ret; } }
+        else version (X86_64)
+            static void* endOfBlock() { asm { naked; mov RAX, FS:[0]; ret; } }
 
-    // base offset
-    auto ti = tls_index(mod, 0);
-    return (__tls_get_addr(&ti)-TLS_DTV_OFFSET)[0 .. sz];
+        // FIXME: It is unclear whether aligning the area down to the next
+        // double-word is necessary and if so, on what systems, but at least
+        // some implementations seem to do it.
+        version (none)
+        {
+            immutable mask = (2 * size_t.sizeof) - 1;
+            sz = (sz + mask) & ~mask;
+        }
+
+        return (endOfBlock() - sz)[0 .. sz];
+    }
+    else
+    {
+        if (mod == 0)
+            return null;
+
+        // base offset
+        auto ti = tls_index(mod, 0);
+        return (__tls_get_addr(&ti)-TLS_DTV_OFFSET)[0 .. sz];
+    }
 }
