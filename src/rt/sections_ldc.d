@@ -22,6 +22,15 @@ import core.stdc.stdlib : alloca;
 import rt.minfo;
 debug(PRINTF) import core.stdc.stdio : printf;
 
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
+
 version (Solaris)
 {
     version = UseELF;
@@ -78,22 +87,12 @@ private __gshared SectionGroup globalSectionGroup;
 
 private
 {
-    version (OSX)
-    {
-        version = Darwin;
-        import core.sys.osx.mach.dyld;
-        import core.sys.osx.mach.getsect;
-        import core.sys.osx.mach.loader;
-    }
-    version (iOS)
-    {
-        version = Darwin;
-        import core.sys.ios.mach.dyld;
-        import core.sys.ios.mach.getsect;
-        import core.sys.ios.mach.loader;
-    }
     version (Darwin)
     {
+        import core.sys.darwin.mach.dyld;
+        import core.sys.darwin.mach.getsect;
+        import core.sys.darwin.mach.loader;
+
         struct Section
         {
             immutable(char)* segment;

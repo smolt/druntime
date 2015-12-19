@@ -207,6 +207,7 @@ $(IMPDIR)\core\sync\semaphore.di : src\core\sync\semaphore.d
 copydir: $(IMPDIR)
 	mkdir $(IMPDIR)\core\stdc
 	mkdir $(IMPDIR)\core\internal
+	mkdir $(IMPDIR)\core\sys\darwin\mach
 	mkdir $(IMPDIR)\core\sys\freebsd\sys
 	mkdir $(IMPDIR)\core\sys\linux\sys
 	mkdir $(IMPDIR)\core\sys\osx\mach
@@ -333,6 +334,39 @@ $(IMPDIR)\core\stdc\wchar_.d : src\core\stdc\wchar_.d
 	copy $** $@
 
 $(IMPDIR)\core\stdc\wctype.d : src\core\stdc\wctype.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\execinfo.d : src\core\sys\darwin\execinfo.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\pthread.d : src\core\sys\darwin\pthread.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\mach\dyld.d : src\core\sys\darwin\mach\dyld.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\mach\getsect.d : src\core\sys\darwin\mach\getsect.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\mach\kern_return.d : src\core\sys\darwin\mach\kern_return.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\mach\loader.d : src\core\sys\darwin\mach\loader.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\mach\port.d : src\core\sys\darwin\mach\port.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\mach\semaphore.d : src\core\sys\darwin\mach\semaphore.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\mach\thread_act.d : src\core\sys\darwin\mach\thread_act.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\sys\cdefs.d : src\core\sys\darwin\sys\cdefs.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\darwin\sys\mman.d : src\core\sys\darwin\sys\mman.d
 	copy $** $@
 
 $(IMPDIR)\core\sys\freebsd\dlfcn.d : src\core\sys\freebsd\dlfcn.d

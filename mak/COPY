@@ -40,6 +40,20 @@ COPY=\
 	$(IMPDIR)\core\stdc\wchar_.d \
 	$(IMPDIR)\core\stdc\wctype.d \
 	\
+	$(IMPDIR)\core\sys\darwin\execinfo.d \
+	$(IMPDIR)\core\sys\darwin\pthread.d \
+	\
+	$(IMPDIR)\core\sys\darwin\mach\dyld.d \
+	$(IMPDIR)\core\sys\darwin\mach\getsect.d \
+	$(IMPDIR)\core\sys\darwin\mach\kern_return.d \
+	$(IMPDIR)\core\sys\darwin\mach\loader.d \
+	$(IMPDIR)\core\sys\darwin\mach\port.d \
+	$(IMPDIR)\core\sys\darwin\mach\semaphore.d \
+	$(IMPDIR)\core\sys\darwin\mach\thread_act.d \
+	\
+	$(IMPDIR)\core\sys\darwin\sys\cdefs.d \
+	$(IMPDIR)\core\sys\darwin\sys\mman.d \
+	\
 	$(IMPDIR)\core\sys\freebsd\dlfcn.d \
 	$(IMPDIR)\core\sys\freebsd\execinfo.d \
 	\

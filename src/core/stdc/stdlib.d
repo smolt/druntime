@@ -17,8 +17,14 @@ module core.stdc.stdlib;
 private import core.stdc.config;
 public import core.stdc.stddef; // for wchar_t
 
-version (OSX) version = Darwin;
-version (iOS) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 extern (C):
 @system:

@@ -17,8 +17,14 @@ module core.sys.posix.utime;
 private import core.sys.posix.config;
 public import core.sys.posix.sys.types; // for time_t
 
-version (OSX) version = Darwin;
-version (iOS) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 version (Posix):
 extern (C):

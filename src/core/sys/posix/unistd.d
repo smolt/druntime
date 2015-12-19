@@ -19,8 +19,14 @@ private import core.stdc.stddef;
 public import core.sys.posix.inttypes;  // for intptr_t
 public import core.sys.posix.sys.types; // for ssize_t, uid_t, gid_t, off_t, pid_t, useconds_t
 
-version( OSX ) version = Darwin;
-version( iOS ) version = Darwin;             // TODO: verify this
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 version (Posix):
 extern (C):

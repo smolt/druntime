@@ -12,8 +12,14 @@
 
 module rt.sections_osx;
 
-version (OSX) version = Darwin;
-version (iOS) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 version (LDC) {} else
 version(Darwin):
@@ -22,16 +28,8 @@ version(Darwin):
 import core.stdc.stdio;
 import core.stdc.string, core.stdc.stdlib;
 import core.sys.posix.pthread;
-version( OSX )
-{
-    import core.sys.osx.mach.dyld;
-    import core.sys.osx.mach.getsect;
-}
-version( iOS )
-{
-    import core.sys.ios.mach.dyld;
-    import core.sys.ios.mach.getsect;
-}
+import core.sys.darwin.mach.dyld;
+import core.sys.darwin.mach.getsect;
 import rt.deh, rt.minfo;
 import rt.util.container.array;
 

@@ -15,8 +15,14 @@ module core.thread;
 public import core.time; // for Duration
 import core.exception : onOutOfMemoryError;
 
-version( OSX ) version = Darwin;
-version( iOS ) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 private
 {
@@ -237,16 +243,10 @@ else version( Posix )
         import core.sys.posix.signal;
         import core.sys.posix.time;
 
-        version( OSX )
+        version( Darwin )
         {
-            import core.sys.osx.mach.thread_act;
-            import core.sys.osx.pthread : pthread_mach_thread_np;
-        }
-
-        version( iOS )
-        {
-            import core.sys.ios.mach.thread_act;
-            import core.sys.ios.pthread : pthread_mach_thread_np;
+            import core.sys.darwin.mach.thread_act;
+            import core.sys.darwin.pthread : pthread_mach_thread_np;
         }
 
         version( GNU )
@@ -2222,7 +2222,7 @@ extern (C) void thread_detachInstance( Thread t )
 }
 
 // TODO: temp disable until fixed
-version (none)
+//version (none)
 unittest
 {
     import core.sync.semaphore;
@@ -3366,8 +3366,7 @@ private void* getStackBottom() nothrow
     }
     else version (Darwin)
     {
-        version (OSX) import core.sys.osx.pthread;
-        version (iOS) import core.sys.ios.pthread;
+        import core.sys.darwin.pthread;
         return pthread_get_stackaddr_np(pthread_self());
     }
     else version (CRuntime_Glibc)
@@ -4733,10 +4732,9 @@ private:
             version (Posix) import core.sys.posix.sys.mman; // mmap
             version (FreeBSD) import core.sys.freebsd.sys.mman : MAP_ANON;
             version (CRuntime_Glibc) import core.sys.linux.sys.mman : MAP_ANON;
-            // TODO: not sure these are needed as core.sys.posix.sys.mman has
+            // TODO: not sure this is needed as core.sys.posix.sys.mman has
             // MAP_ANON.
-            version (OSX) import core.sys.osx.sys.mman : MAP_ANON;
-            version (iOS) import core.sys.ios.sys.mman : MAP_ANON;
+            version (Darwin) import core.sys.darwin.sys.mman : MAP_ANON;
 
             static if( __traits( compiles, mmap ) )
             {

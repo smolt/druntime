@@ -18,8 +18,14 @@ module core.sys.posix.dirent;
 private import core.sys.posix.config;
 public import core.sys.posix.sys.types; // for ino_t
 
-version( OSX ) version = Darwin;
-version( iOS ) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 version (Posix):
 extern (C):
@@ -290,7 +296,7 @@ version( CRuntime_Glibc )
     int readdir_r(DIR*, dirent*, dirent**);
   }
 }
-else version( OSX )
+else version( Darwin )
 {
     pragma(mangle, "readdir_r$INODE64")
         int readdir64_r(DIR*, dirent64*, dirent64**);
@@ -345,35 +351,38 @@ else version( FreeBSD )
     void   seekdir(DIR*, c_long);
     c_long telldir(DIR*);
 }
-else version( OSX )
+else version (Darwin)
 {
-    version( D_LP64 )
+    version( OSX )
     {
-        pragma(mangle, "seekdir$INODE64") void seekdir64(DIR*, c_long);
-        pragma(mangle, "seekdir")         void seekdir32(DIR*, c_long);
-        alias seekdir = seekdir64;
+        version( D_LP64 )
+        {
+            pragma(mangle, "seekdir$INODE64") void seekdir64(DIR*, c_long);
+            pragma(mangle, "seekdir")         void seekdir32(DIR*, c_long);
+            alias seekdir = seekdir64;
 
-        pragma(mangle, "telldir$INODE64") c_long telldir64(DIR*);
-        pragma(mangle, "telldir")         c_long telldir32(DIR*);
-        alias telldir = telldir64;
+            pragma(mangle, "telldir$INODE64") c_long telldir64(DIR*);
+            pragma(mangle, "telldir")         c_long telldir32(DIR*);
+            alias telldir = telldir64;
+        }
+        else
+        {
+            // 32-bit mangles __DARWIN_UNIX03 specific functions with $UNIX2003 to
+            // maintain backward compatibility with binaries build pre 10.5
+            pragma(mangle, "seekdir$INODE64$UNIX2003") void seekdir64(DIR*, c_long);
+            pragma(mangle, "seekdir$UNIX2003") void seekdir32(DIR*, c_long);
+            alias seekdir = seekdir64;
+
+            pragma(mangle, "telldir$INODE64$UNIX2003") c_long telldir64(DIR*);
+            pragma(mangle, "telldir$UNIX2003") c_long telldir32(DIR*);
+            alias telldir = telldir64;
+        }
     }
-    else
+    else // other Darwins (iOS, TVOS, WatchOS)
     {
-        // 32-bit mangles __DARWIN_UNIX03 specific functions with $UNIX2003 to
-        // maintain backward compatibility with binaries build pre 10.5
-        pragma(mangle, "seekdir$INODE64$UNIX2003") void seekdir64(DIR*, c_long);
-        pragma(mangle, "seekdir$UNIX2003") void seekdir32(DIR*, c_long);
-        alias seekdir = seekdir64;
-
-        pragma(mangle, "telldir$INODE64$UNIX2003") c_long telldir64(DIR*);
-        pragma(mangle, "telldir$UNIX2003") c_long telldir32(DIR*);
-        alias telldir = telldir64;
+        void   seekdir(DIR*, c_long);
+        c_long telldir(DIR*);
     }
-}
-else version( iOS )
-{
-    void   seekdir(DIR*, c_long);
-    c_long telldir(DIR*);
 }
 else version (Solaris)
 {

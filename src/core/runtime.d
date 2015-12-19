@@ -16,8 +16,14 @@ module core.runtime;
 
 version (Windows) import core.stdc.wchar_ : wchar_t;
 
-version (OSX) version = Darwin;
-version (iOS) version = Darwin;             // TODO: check this
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 /// C interface for Runtime.loadLibrary
 extern (C) void* rt_loadLibrary(const char* name);
@@ -405,10 +411,8 @@ extern (C) bool runModuleUnitTests()
     // backtrace
     version( CRuntime_Glibc )
         import core.sys.linux.execinfo;
-    else version( OSX )
-        import core.sys.osx.execinfo;
-    else version( iOS )
-        import core.sys.ios.execinfo;
+    else version( Darwin )
+        import core.sys.darwin.execinfo;
     else version( FreeBSD )
         import core.sys.freebsd.execinfo;
     else version( Windows )
@@ -489,10 +493,8 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
     // backtrace
     version( CRuntime_Glibc )
         import core.sys.linux.execinfo;
-    else version( OSX )
-        import core.sys.osx.execinfo;
-    else version( iOS )
-        import core.sys.ios.execinfo;
+    else version( Darwin )
+        import core.sys.darwin.execinfo;
     else version( FreeBSD )
         import core.sys.freebsd.execinfo;
     else version( Windows )

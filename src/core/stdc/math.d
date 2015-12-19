@@ -15,6 +15,15 @@ module core.stdc.math;
 
 private import core.stdc.config;
 
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
+
 extern (C):
 @trusted: // All functions here operate on floating point and integer values only.
 nothrow:
@@ -596,90 +605,6 @@ else version( MinGW )
     }
   }
 }
-else version( iOS )
-{
-    // TODO: combine with OSX below?
-    enum
-    {
-        FP_NAN         = 1,
-        FP_INFINITE    = 2,
-        FP_ZERO        = 3,
-        FP_NORMAL      = 4,
-        FP_SUBNORMAL   = 5,
-    }
-
-    version( AArch64 )
-    {
-        enum
-        {
-            FP_FAST_FMA  = 1,
-            FP_FAST_FMAF = 1,
-            FP_FAST_FMAL = 1,
-        }
-    }
-    else
-    {
-        enum
-        {
-            FP_FAST_FMA  = 0,
-            FP_FAST_FMAF = 0,
-            FP_FAST_FMAL = 0,
-        }
-    }
-
-    // These are available iOS 6 and better
-    int __fpclassifyf(float);
-    int __fpclassifyd(double);
-    int __fpclassifyl(real);
-    int __isfinitef(float);
-    int __isfinited(double);
-    int __isfinitel(real);
-    int __isinff(float);
-    int __isinfd(double);
-    int __isinfl(real);
-    int __isnanf(float);
-    int __isnand(double);
-    int __isnanl(real);
-    int __isnormalf(float);
-    int __isnormald(double);
-    int __isnormall(real);
-    int __signbitf(float);
-    int __signbitd(double);
-    int __signbitl(real);
-
-  extern (D)
-  {
-    //int fpclassify(real-floating x);
-    int fpclassify(float x)     { return __fpclassifyf(x); }
-    int fpclassify(double x)    { return __fpclassifyd(x); }
-    int fpclassify(real x)      { return __fpclassifyl(x); }
-
-    //int isfinite(real-floating x);
-    int isfinite(float x)       { return __isfinitef(x); }
-    int isfinite(double x)      { return __isfinited(x); }
-    int isfinite(real x)        { return __isfinitel(x); }
-
-    //int isinf(real-floating x);
-    int isinf(float x)          { return __isinff(x); }
-    int isinf(double x)         { return __isinfd(x); }
-    int isinf(real x)           { return __isinfl(x); }
-
-    //int isnan(real-floating x);
-    int isnan(float x)          { return __isnanf(x); }
-    int isnan(double x)         { return __isnand(x); }
-    int isnan(real x)           { return __isnanl(x); }
-
-    //int isnormal(real-floating x);
-    int isnormal(float x)       { return __isnormalf(x); }
-    int isnormal(double x)      { return __isnormald(x); }
-    int isnormal(real x)        { return __isnormall(x); }
-
-    //int signbit(real-floating x);
-    int signbit(float x)        { return __signbitf(x); }
-    int signbit(double x)       { return __signbitd(x); }
-    int signbit(real x)         { return __signbitl(x); }
-  }
-}
 else version( OSX )
 {
     enum
@@ -802,6 +727,90 @@ else version( OSX )
             ? __signbitd(x)
             : __signbitl(x);
     }
+  }
+}
+else version( Darwin )  // other Darwins (iOS, TVOS, WatchOS)
+{
+    // TODO: OSX above could become this too
+    enum
+    {
+        FP_NAN         = 1,
+        FP_INFINITE    = 2,
+        FP_ZERO        = 3,
+        FP_NORMAL      = 4,
+        FP_SUBNORMAL   = 5,
+    }
+
+    version( AArch64 )
+    {
+        enum
+        {
+            FP_FAST_FMA  = 1,
+            FP_FAST_FMAF = 1,
+            FP_FAST_FMAL = 1,
+        }
+    }
+    else
+    {
+        enum
+        {
+            FP_FAST_FMA  = 0,
+            FP_FAST_FMAF = 0,
+            FP_FAST_FMAL = 0,
+        }
+    }
+
+    // These are available iOS 6 and better
+    int __fpclassifyf(float);
+    int __fpclassifyd(double);
+    int __fpclassifyl(real);
+    int __isfinitef(float);
+    int __isfinited(double);
+    int __isfinitel(real);
+    int __isinff(float);
+    int __isinfd(double);
+    int __isinfl(real);
+    int __isnanf(float);
+    int __isnand(double);
+    int __isnanl(real);
+    int __isnormalf(float);
+    int __isnormald(double);
+    int __isnormall(real);
+    int __signbitf(float);
+    int __signbitd(double);
+    int __signbitl(real);
+
+  extern (D)
+  {
+    //int fpclassify(real-floating x);
+    int fpclassify(float x)     { return __fpclassifyf(x); }
+    int fpclassify(double x)    { return __fpclassifyd(x); }
+    int fpclassify(real x)      { return __fpclassifyl(x); }
+
+    //int isfinite(real-floating x);
+    int isfinite(float x)       { return __isfinitef(x); }
+    int isfinite(double x)      { return __isfinited(x); }
+    int isfinite(real x)        { return __isfinitel(x); }
+
+    //int isinf(real-floating x);
+    int isinf(float x)          { return __isinff(x); }
+    int isinf(double x)         { return __isinfd(x); }
+    int isinf(real x)           { return __isinfl(x); }
+
+    //int isnan(real-floating x);
+    int isnan(float x)          { return __isnanf(x); }
+    int isnan(double x)         { return __isnand(x); }
+    int isnan(real x)           { return __isnanl(x); }
+
+    //int isnormal(real-floating x);
+    int isnormal(float x)       { return __isnormalf(x); }
+    int isnormal(double x)      { return __isnormald(x); }
+    int isnormal(real x)        { return __isnormall(x); }
+
+    //int signbit(real-floating x);
+    int signbit(float x)        { return __signbitf(x); }
+    int signbit(double x)       { return __signbitd(x); }
+    int signbit(real x)         { return __signbitl(x); }
   }
 }
 else version( FreeBSD )

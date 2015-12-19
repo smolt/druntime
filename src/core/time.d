@@ -93,16 +93,21 @@ import core.sys.posix.time;
 import core.sys.posix.sys.time;
 }
 
-version( OSX ) version = Darwin;
-version( iOS ) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 //This probably should be moved somewhere else in druntime which
 //is Darwin-specific.
 version(Darwin)
 {
 
-version( OSX ) public import core.sys.osx.mach.kern_return;
-version( iOS ) public import core.sys.ios.mach.kern_return;
+public import core.sys.darwin.mach.kern_return;
 
 extern(C) nothrow @nogc
 {

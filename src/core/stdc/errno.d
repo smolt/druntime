@@ -14,8 +14,14 @@
 
 module core.stdc.errno;
 
-version( OSX ) version = Darwin;
-version( iOS ) version = Darwin;             // TODO: verify this
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 @trusted: // Only manipulates errno.
 nothrow:

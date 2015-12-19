@@ -17,8 +17,14 @@ module core.stdc.time;
 
 private import core.stdc.config;
 
-version( OSX ) version = Darwin;
-version( iOS ) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 extern (C):
 @trusted: // There are only a few functions here that use unsafe C strings.
@@ -79,7 +85,8 @@ version( Windows )
 }
 else version( Darwin )
 {
-    enum clock_t CLOCKS_PER_SEC = 1_000_000; // since OSX 10.5
+    // OSX since 10.5 defaults to 1_000_000
+    enum clock_t CLOCKS_PER_SEC = 1_000_000;
 }
 else version( FreeBSD )
 {

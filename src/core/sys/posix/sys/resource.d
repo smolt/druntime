@@ -13,8 +13,14 @@ public import core.sys.posix.sys.time;
 public import core.sys.posix.sys.types: id_t;
 import core.sys.posix.config;
 
-version( OSX ) version = Darwin;
-version( iOS ) version = Darwin;             // TODO: verify this
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 nothrow extern(C):
 

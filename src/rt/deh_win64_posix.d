@@ -23,8 +23,14 @@ else version (Posix)
 
 version (Win64_Posix):
 
-version (OSX) version = Darwin;
-version (iOS) version = Darwin; // TODO: check this
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 //debug=PRINTF;
 debug(PRINTF) import core.stdc.stdio : printf;

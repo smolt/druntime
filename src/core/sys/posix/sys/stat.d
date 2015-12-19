@@ -19,8 +19,14 @@ private import core.stdc.stdint;
 private import core.sys.posix.time;     // for timespec
 public import core.sys.posix.sys.types; // for off_t, mode_t
 
-version (iOS) version = Darwin;
-version (OSX) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 version (Posix):
 extern (C) nothrow @nogc:

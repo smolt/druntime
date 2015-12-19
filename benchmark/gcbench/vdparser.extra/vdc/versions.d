@@ -33,6 +33,8 @@ static @property int[string] sPredefinedVersions()
             "linux" : -1,
             "OSX" : -1,
             "iOS" : -1,
+            "TVOS" : -1,
+            "WatchOS" : -1,
             "FreeBSD" : -1,
             "OpenBSD" : -1,
             "NetBSD" : -1,

@@ -18,8 +18,14 @@ module core.sync.semaphore;
 public import core.sync.exception;
 public import core.time;
 
-version( OSX ) version = Darwin;
-version( iOS ) version = Darwin;
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 version( Windows )
 {
@@ -30,8 +36,7 @@ else version( Darwin )
     private import core.sync.config;
     private import core.stdc.errno;
     private import core.sys.posix.time;
-    version( OSX ) private import core.sys.osx.mach.semaphore;
-    version( iOS ) private import core.sys.ios.mach.semaphore;
+    private import core.sys.darwin.mach.semaphore;
 }
 else version( Posix )
 {
