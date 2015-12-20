@@ -1156,7 +1156,7 @@ else version( Darwin )
         alias fstat = fstat64;
         alias stat = stat64;
     }
-    else version( iOS )
+    else
     {
         int fstat(int, stat_t*);
         int lstat(in char*, stat_t*);
@@ -1166,9 +1166,6 @@ else version( Darwin )
         alias fstat64 = fstat;
         alias stat64 = stat;
     }
-    else
-        static assert(false, "Unsupported Darwin platform");
-
 }
 else version( FreeBSD )
 {

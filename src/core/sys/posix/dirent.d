@@ -296,7 +296,7 @@ version( CRuntime_Glibc )
     int readdir_r(DIR*, dirent*, dirent**);
   }
 }
-else version( Darwin )
+else version( OSX )
 {
     pragma(mangle, "readdir_r$INODE64")
         int readdir64_r(DIR*, dirent64*, dirent64**);
@@ -304,7 +304,7 @@ else version( Darwin )
         int readdir32_r(DIR*, dirent32*, dirent32**);
     alias readdir_r = readdir64_r;
 }
-else version( iOS )
+else version( Darwin )
 {
     int readdir_r(DIR*, dirent*, dirent**);
 }
