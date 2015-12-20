@@ -34,6 +34,7 @@ int pthread_threadid_np(pthread_t, ulong*);
 // ^ __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_2)
 int pthread_rwlock_longrdlock_np(pthread_rwlock_t*);
 int pthread_rwlock_yieldwrlock_np(pthread_rwlock_t*);
+// TODO: check if these are available for iOS
 // ^ __OSX_AVAILABLE_STARTING(__MAC_10_7, __IPHONE_NA);
 int pthread_rwlock_downgrade_np(pthread_rwlock_t*);
 int pthread_rwlock_upgrade_np(pthread_rwlock_t*);
