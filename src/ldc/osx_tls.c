@@ -22,7 +22,9 @@
  * https://github.com/smolt/iphoneos-apple-support
  * It renames the dyld private API calls by prepending "ios".
  */
-#ifdef __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__
+#if defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__) || \
+    defined(__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__) || \
+    defined(__ENVIRONMENT_WATCH_OS_VERSION_MIN_REQUIRED__)
 #define dyld_register_tlv_state_change_handler \
     iosdyld_register_tlv_state_change_handler
 #define dyld_enumerate_tlv_storage \
