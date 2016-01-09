@@ -18,6 +18,10 @@ version (ARM)
 {
     version (iOS)
         version = SjLj_Exceptions;
+    else version (TVOS)
+        version = SjLj_Exceptions;
+    else version (WatchOS)
+        {} // Normal unwinder
     else
         version = ARM_EABI_UNWINDER;
 }

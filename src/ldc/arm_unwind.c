@@ -10,7 +10,7 @@
  * Authors:   David Nadlinger
  */
 
-#if defined(__arm__) && !defined(__USING_SJLJ_EXCEPTIONS__)
+#if defined(__arm__) && !defined(__APPLE__)
 
 #include <unwind.h>
 

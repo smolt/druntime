@@ -30,6 +30,10 @@ version (ARM)
 {
     version (iOS)
         version = SjLj_Exceptions;
+    else version (TVOS)
+        version = SjLj_Exceptions;
+    else version (WatchOS)
+        {} // Normal unwinder
     else
         version = ARM_EABI_UNWINDER;
 }
@@ -72,6 +76,15 @@ extern(C)
         _Unwind_Exception_Cleanup_Fn exception_cleanup;
         ptrdiff_t private_1;
         ptrdiff_t private_2;
+        /+ TODO: apple version has this comment:
+#if !__LP64__
+  // The gcc implementation of _Unwind_Exception used attribute mode on the
+  // above fields which had the side effect of causing this whole struct to
+  // round up to 32 bytes in size. To be more explicit, we add pad fields
+  // added for binary compatibility.
+  uint32_t reserved[3];
+#endif
+    +/
     }
 
     ptrdiff_t _Unwind_GetLanguageSpecificData(_Unwind_Context_Ptr context);
