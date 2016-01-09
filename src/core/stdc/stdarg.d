@@ -363,6 +363,10 @@ version( LDC )
         }
         else version( ARM )
         {
+            version (WatchOS) {
+                if (T.alignof > size_t.sizeof)
+                    ap = cast(va_list)((cast(size_t)ap + T.alignof - 1) & -T.alignof);
+            }
             T arg = *cast(T*)ap;
             ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
             return arg;
@@ -418,6 +422,10 @@ version( LDC )
         }
         else version( ARM )
         {
+            version (WatchOS) {
+                if (T.alignof > size_t.sizeof)
+                    ap = cast(va_list)((cast(size_t)ap + T.alignof - 1) & -T.alignof);
+            }
             parmn = *cast(T*)ap;
             ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
         }
@@ -471,6 +479,11 @@ version( LDC )
             // Wait until everyone updates to get TypeInfo.talign
             //auto talign = ti.talign;
             //auto p = cast(va_list) ((cast(size_t)ap + talign - 1) & ~(talign - 1));
+            version (WatchOS) {
+                auto talign = ti.talign;
+                if (talign > size_t.sizeof)
+                    ap = cast(va_list)((cast(size_t)ap + talign - 1) & -talign);
+            }
             auto p = ap;
             ap = p + ((tsize + size_t.sizeof - 1) & ~(size_t.sizeof - 1));
         }
