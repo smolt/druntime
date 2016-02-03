@@ -597,8 +597,7 @@ fiber_switchContext:
      * address is in lr on the initial context switch.
      */
     mov lr, #0
-    // return by writing lr into pc
-    mov pc, r1
+    bx r1
     .fnend
 
 #elif defined(__aarch64__)
