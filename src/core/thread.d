@@ -2481,11 +2481,39 @@ else
                 // on arm arch.
                 version (ARM_Thumb1)
                 {
-                    // "+r" for r/w to indicate $0 in stm is updated seems to be
-                    // ignored.  Okay here since reg.ptr isn't used later.
-                    size_t[4] regs = void;
-                    __asm("stm $0!, {r4-r7}", "+r", regs.ptr);
-                    sp = __asm!(void*)("mov $0, sp", "=r");
+                    // original thumb takes a few more instructions
+                    // "+r" for r/w to indicate $0 in stm, ldm is modified.
+                    // Okay here since reg.ptr isn't used later.
+                    size_t[8] regs = void;
+                    version (none) {
+                    sp = __asm!(void*)
+                        (`mov $0, $1
+                          stm $1!, {r4-r7}
+                          mov r4, r8
+                          mov r5, r9
+                          mov r6, r10
+                          mov r7, r11
+                          stm $1!, {r4-r7}  /* really r8-r11 */
+                          ldm $0!, {r4-r7}  /* restore what we clobbered */
+                          mov $0, sp`,
+                         "=r,+r", regs.ptr);
+                    }
+                    else {
+                        // above version doesn't work with llvm 3.5, why?
+                        // but this won't work with llvm 3.6 and later because
+                        // clobber constraints changed
+                        __asm
+                        (`mov $1, $0
+                          stm $0!, {r4-r7}
+                          mov r4, r8
+                          mov r5, r9
+                          mov r6, r10
+                          mov r7, r11
+                          stm $0!, {r4-r7}  /* really r8-r11 */
+                          ldm $1!, {r4-r7}  /* restore what we clobbered */`,
+                         "+r,~r", regs.ptr);
+                        sp = __asm!(void*)("mov $0, sp", "=r");
+                    }
                 }
                 else // arm and thumb2 instructions
                 {
