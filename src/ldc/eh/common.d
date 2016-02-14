@@ -4,8 +4,8 @@
  */
 module ldc.eh.common;
 
-// debug = EH_personality;
-// debug = EH_personality_verbose;
+ debug = EH_personality;
+ debug = EH_personality_verbose;
 
 import core.memory : GC;
 import core.stdc.stdio;
@@ -516,7 +516,7 @@ extern(C) auto eh_personality_common(NativeContext)(ref NativeContext nativeCont
 
             debug(EH_personality_verbose)
             {
-                printf("  - ip=%llx %d %d %llx\n", ip, block_start_offset,
+                printf("  - ip=%p %u %u %tx\n", ip, block_start_offset,
                     block_size, landingPadAddr);
             }
 

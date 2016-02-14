@@ -7,8 +7,8 @@ module ldc.eh.libunwind;
 version (CRuntime_Microsoft) {} else
 {
 
-// debug = EH_personality;
-// debug = EH_personality_verbose;
+debug = EH_personality;
+debug = EH_personality_verbose;
 // debug = EH_verifyExceptionStructLifetime;
 
 import core.stdc.stdlib : malloc, free;
@@ -136,6 +136,7 @@ struct _d_exception
     Object exception_object;
     version (ARM_EABI_UNWINDER)
     {
+	align(8)
         _Unwind_Control_Block unwind_info;
     }
     else
@@ -357,6 +358,7 @@ version(ARM_EABI_UNWINDER)
           _uw reserved1;
         }
         pr_cache_t pr_cache;
+	long dum;
     }
 
     extern(C) _Unwind_Reason_Code __gnu_unwind_frame(_Unwind_Control_Block *, _Unwind_Context_Ptr);
@@ -387,6 +389,7 @@ version(ARM_EABI_UNWINDER)
                 case _Unwind_State.VIRTUAL_UNWIND_FRAME:
                     actions = _Unwind_Action.SEARCH_PHASE;
                     break;
+                case _Unwind_State.UNWIND_FRAME_RESUME:
                 case _Unwind_State.UNWIND_FRAME_STARTING:
                     actions = _Unwind_Action.CLEANUP_PHASE;
                     if (!(state & _Unwind_State.FORCE_UNWIND) &&
@@ -394,8 +397,11 @@ version(ARM_EABI_UNWINDER)
                         actions |= _Unwind_Action.HANDLER_FRAME;
                     }
                     break;
-                case _Unwind_State.UNWIND_FRAME_RESUME:
-                    return continueUnwind(ucb, context);
+                //case _Unwind_State.UNWIND_FRAME_RESUME:
+                    // if (ucb.cleanup_cache.bitpattern[0])
+	            //    ucb.pr_cache.ehtp = ucb.cleanup_cache.bitpattern[0];
+		    //return continueUnwind(ucb, context);
+                    //return _Unwind_Reason_Code.CONTINUE_UNWIND;
                 default:
                     fatalerror("Unhandled ARM EABI unwind state.");
               }
@@ -413,10 +419,14 @@ version(ARM_EABI_UNWINDER)
         if (ucb.exception_class != _d_exception_class)
             return _Unwind_Reason_Code.FATAL_PHASE1_ERROR;
 
+debug(EH_personality_verbose) printf("  ACTION: %u %x\n", actions, actions);
+
         auto nativeContext = NativeContext(actions, ucb.toDException(), context);
         _Unwind_Reason_Code rc = eh_personality_common(nativeContext);
+debug(EH_personality_verbose) printf("  RETURN rc: %u\n", rc);
         if (rc == _Unwind_Reason_Code.CONTINUE_UNWIND)
             return continueUnwind(ucb, context);
+
         return rc;
     }
 }
@@ -515,18 +525,21 @@ void _d_throw_exception(Object e)
 
 /// Called by our compiler-generate code to resume unwinding after a finally
 /// block (or dtor destruction block) has been run.
-void _d_eh_resume_unwind(void* ptr)
+auto _dx_eh_resume_unwind(void* ptr, uint ip)
 {
     auto exception_struct = cast(_d_exception*) ptr;
-
+    //auto ip = _Unwind_GetIP(context);
+    exception_struct.unwind_info.unwinder_cache.reserved3 = ip;
     debug(EH_personality)
     {
         printf("= Returning from cleanup block for %p (struct at %p)\n",
             exception_struct.exception_object, exception_struct);
+	printf("  IP %p\n", ip);
     }
 
     popCleanupBlockRecord();
-    _Unwind_Resume(&exception_struct.unwind_info);
+    return &exception_struct.unwind_info;
+    //_Unwind_Resume(&exception_struct.unwind_info);
 }
 
 Object _d_eh_destroy_exception_struct(void* ptr)
@@ -555,7 +568,12 @@ Object _d_eh_destroy_exception_struct(void* ptr)
 
 Object _d_eh_enter_catch(void* ptr)
 {
-    auto obj = _d_eh_destroy_exception_struct(cast(_d_exception*) ptr);
+    auto exception_struct = cast(_d_exception*)ptr;
+    version (ARM_EABI_UNWINDER)
+    {
+        //_Unwind_Complete(exception_struct.unwind_info);
+    }
+    auto obj = _d_eh_destroy_exception_struct(exception_struct);
     popCleanupBlockRecord();
     return obj;
 }
