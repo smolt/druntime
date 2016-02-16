@@ -320,7 +320,20 @@ version( LDC )
     }
     else version (AAPCS)
     {
-        // Need std::__va_list for C++ compatability
+        // Need std::__va_list for C++ mangling compatability
+        // section AAPCS 7.1.4
+        extern (C++, std) struct __va_list
+        {
+            void *__ap;
+            alias __ap this;
+        }
+
+        alias va_list = char*;
+
+        version (none) {
+        // TODO: really want this, but need to fix arm-abi to have
+        // correct builtin va_list type for _argptr.
+        // Once fixed, can get rid of special case in runnable/cppa.cpp
         // section AAPCS 7.1.4 defines __va_list as struct {void *__ap;},
         //   but make convertable to size_t so can have common ARM code below
         extern (C++, std) union __va_list
@@ -331,6 +344,7 @@ version( LDC )
             alias as_size_t this;
         }
         alias va_list = __va_list;
+        }
     }
     else
     {
