@@ -20,8 +20,9 @@ version ( PPC64 ) version = AnyPPC;
 
 version( ARM )
 {
-    // iOS uses older APCS variant instead of AAPCS
+    // iOS/tvOS uses older APCS variant instead of AAPCS
     version( iOS ) {}
+    else version( TVOS ) {}
     else version = AAPCS;
 }
 
@@ -311,6 +312,25 @@ version( LDC )
     version (SystemV_AMD64)
     {
         alias va_list = __va_list_tag*;
+    }
+    else version (WatchOS)
+    {
+        // WatchOS is AAPCS, but not in this case
+        alias va_list = char*;
+    }
+    else version (AAPCS)
+    {
+        // Need std::__va_list for C++ compatability
+        // section AAPCS 7.1.4 defines __va_list as struct {void *__ap;},
+        //   but make convertable to size_t so can have common ARM code below
+        extern (C++, std) union __va_list
+        {
+            size_t as_size_t;
+            void *__ap;
+
+            alias as_size_t this;
+        }
+        alias va_list = __va_list;
     }
     else
     {
