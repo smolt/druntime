@@ -4,8 +4,8 @@
  */
 module ldc.eh.common;
 
- debug = EH_personality;
- debug = EH_personality_verbose;
+// debug = EH_personality;
+// debug = EH_personality_verbose;
 
 import core.memory : GC;
 import core.stdc.stdio;

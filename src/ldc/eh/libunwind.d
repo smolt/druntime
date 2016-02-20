@@ -7,8 +7,8 @@ module ldc.eh.libunwind;
 version (CRuntime_Microsoft) {} else
 {
 
-debug = EH_personality;
-debug = EH_personality_verbose;
+// debug = EH_personality;
+// debug = EH_personality_verbose;
 // debug = EH_verifyExceptionStructLifetime;
 
 import core.stdc.stdlib : malloc, free;
@@ -223,7 +223,18 @@ struct NativeContext
     // As a further optimization step, we could look into caching that
     // result inside _d_exception.
     bool skipCatchComparison()       { return !isSearchPhase() && (actions & _Unwind_Action.HANDLER_FRAME) == 0; }
-    ptrdiff_t getCfaAddress()        { return _Unwind_GetCFA(context); }
+
+    ptrdiff_t getCfaAddress()
+    {
+        // libgcc _Unwind_GetCFA for ARM_EABI is a partial
+        // implementation, only valid during forced unwinds, so use
+        // stack pointer instead.
+        version (ARM_EABI_UNWINDER)
+            return _Unwind_GetGR(context, UNWIND_STACK_REG);
+        else
+            return _Unwind_GetCFA(context);
+    }
+
     Object getThrownObject()         { return exception_struct.exception_object; }
 
     void overrideThrownObject(Object newObject)
@@ -383,6 +394,9 @@ version(ARM_EABI_UNWINDER)
     {
         debug(EH_personality_verbose) printf(" - entering personality function. state: %d; ucb: %p, context: %p\n", state, ucb, context);
 
+        //printf("SP = %p\n", _Unwind_GetGR(context, UNWIND_STACK_REG));
+
+        // TODO: drop enum type name in these withs
         _Unwind_Action actions;
         with (_Unwind_State) with (_Unwind_Action) {
             switch (state & _Unwind_State.ACTION_MASK) {
