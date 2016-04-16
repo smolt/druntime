@@ -35,7 +35,7 @@ extern (C):
 TCP_NODELAY
 */
 
-version( linux )
+version( CRuntime_Glibc )
 {
     enum TCP_NODELAY = 1;
 }
@@ -51,7 +51,7 @@ else version( Solaris )
 {
     enum TCP_NODELAY = 1;
 }
-else version( Android )
+else version( linux )
 {
     enum TCP_NODELAY = 1;
 }

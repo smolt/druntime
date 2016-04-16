@@ -113,7 +113,7 @@ int setenv(in char*, in char*, int);
 int unsetenv(in char*);
 */
 
-version( linux )
+version( CRuntime_Glibc )
 {
     int setenv(in char*, in char*, int);
     int unsetenv(in char*);
@@ -134,7 +134,7 @@ else version( FreeBSD )
 
     void* valloc(size_t); // LEGACY non-standard
 }
-else version( Android )
+else version( CRuntime_Bionic )
 {
     int setenv(in char*, in char*, int);
     int unsetenv(in char*);

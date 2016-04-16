@@ -24,7 +24,7 @@
 .section .note.GNU-stack,"",%progbits
 #endif
 
-/* Let preprocessor tell us if C symbols have a prefix: __USER_LAEBL_PREFIX__ */
+/* Let preprocessor tell us if C symbols have a prefix: __USER_LABEL_PREFIX__ */
 #ifdef __USER_LABEL_PREFIX__
 #define GLUE2(a, b) a ## b
 #define GLUE(a, b) GLUE2(a, b)

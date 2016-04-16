@@ -93,6 +93,7 @@ extern(C)
     {
         _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Control_Block*);
         void _Unwind_Resume(_Unwind_Control_Block*);
+        void _Unwind_Complete(_Unwind_Control_Block*);
 
         // On ARM, these are macros resp. not visible (static inline). To avoid
         // an unmaintainable amount of dependencies on implementation details,
@@ -235,7 +236,18 @@ struct NativeContext
     // As a further optimization step, we could look into caching that
     // result inside _d_exception.
     bool skipCatchComparison()       { return !isSearchPhase() && (actions & _Unwind_Action.HANDLER_FRAME) == 0; }
-    ptrdiff_t getCfaAddress()        { return _Unwind_GetCFA(context); }
+
+    ptrdiff_t getCfaAddress()
+    {
+        // libgcc _Unwind_GetCFA for ARM_EABI is a partial
+        // implementation, only valid during forced unwinds, so use
+        // stack pointer instead.
+        version (ARM_EABI_UNWINDER)
+            return _Unwind_GetGR(context, UNWIND_STACK_REG);
+        else
+            return _Unwind_GetCFA(context);
+    }
+
     Object getThrownObject()         { return exception_struct.exception_object; }
 
     void overrideThrownObject(Object newObject)
@@ -260,7 +272,17 @@ struct NativeContext
         debug(EH_personality) printf("  - Found catch clause for %p\n", exception_struct);
 
         if (actions & _Unwind_Action.SEARCH_PHASE)
+        {
+            // Cache phase 1 data (TODO: take advantage of cache)
+            version (ARM_EABI_UNWINDER) with (exception_struct.unwind_info)
+            {
+                barrier_cache.sp = _Unwind_GetGR(context, UNWIND_STACK_REG);
+                barrier_cache.bitpattern[1] = ti_offset;
+                barrier_cache.bitpattern[3] = landingPadAddr;
+            }
+
             return _Unwind_Reason_Code.HANDLER_FOUND;
+        }
 
         if (!(actions & _Unwind_Action.CLEANUP_PHASE))
             fatalerror("Unknown phase");
@@ -398,7 +420,13 @@ version(ARM_EABI_UNWINDER)
                     }
                     break;
                 case _Unwind_State.UNWIND_FRAME_RESUME:
-                    return continueUnwind(ucb, context);
+                    // return continueUnwind(ucb, context);
+                    //
+                    // Can't do normal continue unwind because there
+                    // might be a handler stll in this frame.
+                    // Starting again at saved IP instead.
+                    _Unwind_SetIP(context, ucb.cleanup_cache.bitpattern[0]);
+                    goto case UNWIND_FRAME_STARTING;
                 default:
                     fatalerror("Unhandled ARM EABI unwind state.");
               }
@@ -527,7 +555,45 @@ void _d_throw_exception(Object e)
 
 /// Called by our compiler-generate code to resume unwinding after a finally
 /// block (or dtor destruction block) has been run.
-void _d_eh_resume_unwind(void* ptr)
+version (ARM_EABI_UNWINDER)
+{
+    // Implemented in asm to preserve core registers, declaration here
+    // for reference only
+    void _d_eh_resume_unwind(void* ptr);
+
+    // Perform cleanups before resuming.  Can't call _Unwind_Resume
+    // because it expects core register state at callsite.
+    //
+    // Also, a workaround for ARM EABI unwinding.  When D catch
+    // handlers are merged by the LLVM inliner, the IR has a landing
+    // pad that claims it will handle multiple exception types, but
+    // then only handles one and falls into _d_eh_resume_unwind.  This
+    // call to _d_eh_resume_unwind has a landing pad with the correct
+    // exception handler, but gcc ARM EABI unwind implementation
+    // resumes in the next frame up and misses it. Other gcc
+    // unwinders, C++ Itanium and SjLj, handle this case fine by
+    // resuming in the current frame.  The workaround is to save IP so
+    // personality can resume in the current frame.
+    auto _d_arm_eabi_end_cleanup(void* ptr, ptrdiff_t ip)
+    {
+	debug(EH_personality_verbose) printf("  - Resume ip %p\n", ip);
+
+        // tell personality the real IP (cleanup_cache can be used
+        // however we like)
+        with (cast(_d_exception*)ptr)
+            unwind_info.cleanup_cache.bitpattern[0] = ip;
+        return _d_end_cleanup(ptr);
+    }
+}
+else
+{
+    void _d_eh_resume_unwind(void* ptr)
+    {
+        _Unwind_Resume(_d_end_cleanup(ptr));
+    }
+}
+
+auto _d_end_cleanup(void* ptr)
 {
     auto exception_struct = cast(_d_exception*) ptr;
 
@@ -538,7 +604,7 @@ void _d_eh_resume_unwind(void* ptr)
     }
 
     popCleanupBlockRecord();
-    _Unwind_Resume(&exception_struct.unwind_info);
+    return &exception_struct.unwind_info;
 }
 
 Object _d_eh_destroy_exception_struct(void* ptr)
@@ -567,7 +633,12 @@ Object _d_eh_destroy_exception_struct(void* ptr)
 
 Object _d_eh_enter_catch(void* ptr)
 {
-    auto obj = _d_eh_destroy_exception_struct(cast(_d_exception*) ptr);
+    auto exception_struct = cast(_d_exception*)ptr;
+    version (ARM_EABI_UNWINDER)
+    {
+        _Unwind_Complete(&exception_struct.unwind_info);
+    }
+    auto obj = _d_eh_destroy_exception_struct(exception_struct);
     popCleanupBlockRecord();
     return obj;
 }

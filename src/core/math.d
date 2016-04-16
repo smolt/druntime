@@ -104,9 +104,9 @@ extern (C) real rndtonl(real x);
 {
   version (LDC)
   {
-    extern(D) float  sqrt(float  x) { return llvm_sqrt(x); }
-    extern(D) double sqrt(double x) { return llvm_sqrt(x); }
-    extern(D) real   sqrt(real   x) { return llvm_sqrt(x); }
+    extern(D) float  sqrt(float  x) { return x < 0 ? float.nan  : llvm_sqrt(x); }
+    extern(D) double sqrt(double x) { return x < 0 ? double.nan : llvm_sqrt(x); }
+    extern(D) real   sqrt(real   x) { return x < 0 ? real.nan   : llvm_sqrt(x); }
   }
   else
   {
@@ -170,7 +170,18 @@ else
 real ldexp(real n, int exp) @safe pure nothrow;    /* intrinsic */
 
 unittest {
-    static if (real.mant_dig == 64)
+    static if (real.mant_dig == 113)
+    {
+        assert(ldexp(1, -16384) == 0x1p-16384L);
+        assert(ldexp(1, -16382) == 0x1p-16382L);
+    }
+    else static if (real.mant_dig == 106)
+    {
+        assert(ldexp(1,  1023) == 0x1p1023L);
+        assert(ldexp(1, -1022) == 0x1p-1022L);
+        assert(ldexp(1, -1021) == 0x1p-1021L);
+    }
+    else static if (real.mant_dig == 64)
     {
         assert(ldexp(1, -16384) == 0x1p-16384L);
         assert(ldexp(1, -16382) == 0x1p-16382L);
@@ -182,7 +193,7 @@ unittest {
         assert(ldexp(1, -1021) == 0x1p-1021L);
     }
     else
-        assert(false, "Only 80bit and 64bit reals expected here");
+        assert(false, "Only 128bit, 80bit and 64bit reals expected here");
 }
 
 /*******************************

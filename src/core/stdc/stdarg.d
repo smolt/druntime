@@ -18,6 +18,20 @@ module core.stdc.stdarg;
 version ( PPC ) version = AnyPPC;
 version ( PPC64 ) version = AnyPPC;
 
+version( ARM )
+{
+    // iOS uses older APCS variant instead of AAPCS
+    version( iOS ) {}
+    else version = AAPCS;
+}
+version( AArch64 )
+{
+    // iOS, tvOS are AAPCS64, but don't follow it for va_list
+    version( iOS ) {}
+    else version( TVOS ) {}
+    else version = AAPCS64;
+}
+
 version( X86_64 )
 {
     // Determine if type is a vector type
@@ -287,7 +301,18 @@ version( X86_64 )
 
 version( LDC )
 {
-    // FIXME: This isn't actually tested at all for ARM.
+    version( AAPCS64 )
+    {
+        void va_arg_aarch64(T)(ref __va_list ap, ref T parmn)
+        {
+            assert(false, "Not yet implemented");
+        }
+
+        void va_arg_aarch64()(ref __va_list ap, TypeInfo ti, void* parmn)
+        {
+            assert(false, "Not yet implemented");
+        }
+    }
 
     version( X86_64 )
     {
@@ -307,6 +332,42 @@ version( LDC )
     {
         alias va_list = __va_list_tag*;
     }
+    else version (AAPCS64)
+    {
+        alias va_list = __va_list;
+    }
+    else version (ARM) // TODO: AAPCS?
+    {
+        // __va_list will be defined for ARM AAPCS targets that need
+        // it by object.d.  Use a .ptr property so ARM code below can
+        // be common
+        static if (is(__va_list))
+        {
+            alias va_list = __va_list;
+
+            private ref auto ptr(ref va_list ap) @property
+            {
+                return ap.__ap;
+            }
+            private auto ptr(ref va_list ap, void* ptr) @property
+            {
+                return ap.__ap = ptr;
+            }
+        }
+        else
+        {
+            alias va_list = char*;
+
+            private ref auto ptr(ref va_list ap) @property
+            {
+                return ap;
+            }
+            private auto ptr(ref va_list ap, void* ptr) @property
+            {
+                return ap = cast(va_list)ptr;
+            }
+        }
+    }
     else
     {
         alias va_list = char*;
@@ -321,6 +382,12 @@ version( LDC )
     T va_arg(T)(ref va_list ap)
     {
         version( SystemV_AMD64 )
+        {
+            T arg;
+            va_arg(ap, arg);
+            return arg;
+        }
+        else version( AAPCS64 )
         {
             T arg;
             va_arg(ap, arg);
@@ -363,12 +430,15 @@ version( LDC )
         }
         else version( ARM )
         {
-            version (WatchOS) {
-                if (T.alignof > size_t.sizeof)
-                    ap = cast(va_list)((cast(size_t)ap + T.alignof - 1) & -T.alignof);
+            // AAPCS sec 5.5 B.5: type with alignment >= 8 is 8-byte aligned
+            // instead of normal 4-byte alignment (APCS doesn't do this).
+            version( AAPCS )
+            {
+                if (T.alignof >= 8)
+                    ap.ptr = cast(void*)((cast(size_t)ap.ptr + 7) & ~7);
             }
-            T arg = *cast(T*)ap;
-            ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
+            T arg = *cast(T*)ap.ptr;
+            ap.ptr += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
             return arg;
         }
         else version( AnyPPC )
@@ -392,6 +462,10 @@ version( LDC )
         version( SystemV_AMD64 )
         {
             va_arg_x86_64(cast(__va_list*)ap, parmn);
+        }
+        else version( AAPCS64 )
+        {
+            va_arg_aarch64(ap, parmn);
         }
         else version( Win64 )
         {
@@ -422,12 +496,15 @@ version( LDC )
         }
         else version( ARM )
         {
-            version (WatchOS) {
-                if (T.alignof > size_t.sizeof)
-                    ap = cast(va_list)((cast(size_t)ap + T.alignof - 1) & -T.alignof);
+            // AAPCS sec 5.5 B.5: type with alignment >= 8 is 8-byte aligned
+            // instead of normal 4-byte alignment (APCS doesn't do this).
+            version( AAPCS )
+            {
+                if (T.alignof >= 8)
+                    ap.ptr = cast(void*)((cast(size_t)ap.ptr + 7) & ~7);
             }
-            parmn = *cast(T*)ap;
-            ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
+            parmn = *cast(T*)ap.ptr;
+            ap.ptr += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
         }
         else
             parmn = va_arg!T(ap);
@@ -438,6 +515,10 @@ version( LDC )
       version( SystemV_AMD64 )
       {
         va_arg_x86_64(cast(__va_list*)ap, ti, parmn);
+      }
+      else version( AAPCS64 )
+      {
+        va_arg_aarch64(ap, ti, parmn);
       }
       else
       {
@@ -476,16 +557,15 @@ version( LDC )
         }
         else version( ARM )
         {
-            // Wait until everyone updates to get TypeInfo.talign
-            //auto talign = ti.talign;
-            //auto p = cast(va_list) ((cast(size_t)ap + talign - 1) & ~(talign - 1));
-            version (WatchOS) {
-                auto talign = ti.talign;
-                if (talign > size_t.sizeof)
-                    ap = cast(va_list)((cast(size_t)ap + talign - 1) & -talign);
+            // AAPCS sec 5.5 B.5: type with alignment >= 8 is 8-byte aligned
+            // instead of normal 4-byte alignment (APCS doesn't do this).
+            version( AAPCS )
+            {
+                if (ti.talign >= 8)
+                    ap.ptr = cast(void*)((cast(size_t)ap.ptr + 7) & ~7);
             }
-            auto p = ap;
-            ap = p + ((tsize + size_t.sizeof - 1) & ~(size_t.sizeof - 1));
+            auto p = ap.ptr;
+            ap.ptr = p + ((tsize + size_t.sizeof - 1) & ~(size_t.sizeof - 1));
         }
         else version( AnyPPC )
         {

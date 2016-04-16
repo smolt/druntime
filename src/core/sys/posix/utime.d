@@ -44,7 +44,7 @@ struct utimbuf
 int utime(in char*, in utimbuf*);
 */
 
-version( linux )
+version( CRuntime_Glibc )
 {
     struct utimbuf
     {
@@ -84,7 +84,7 @@ else version( Solaris )
 
     int utime(in char*, in utimbuf*);
 }
-else version( Android )
+else version( CRuntime_Bionic )
 {
     struct utimbuf
     {
